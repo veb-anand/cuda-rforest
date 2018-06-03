@@ -24,44 +24,42 @@
     // uint threads_per_block = blockDim.x;
 
     if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
-    __syncthreads();
 
     for (uint col = 0; col < num_points; col++) {
         uint k = (blockIdx.x * num_points) + tid;
 
-        if (blockIdx.x < num_features) {
-            // shmem[tid] = 0.;
-            uint l = (blockIdx.x * num_points) + col;
+        // BLOCKSPECIFIC
+        uint l = (blockIdx.x * num_points) + col;
 
-            // ITERATE by THREADS_PER_BLOCK until we are done with num_points!
+        // ITERATE by THREADS_PER_BLOCK until we are done with num_points!
 
-            if (tid < num_points) {
-                gpu_tmp[k] = (gpu_in_x[k] >= gpu_in_x[l]);
-                shmem[4 * tid] = gpu_tmp[k];
-                shmem[4 * tid + 1] = shmem[4 * tid] * gpu_in_y[tid];
-                shmem[4 * tid + 2] = (1 - shmem[4 * tid]) * gpu_in_y[tid];
-                // atomicAdd(&shmem[0], gpu_tmp[k]);
+        if (tid < num_points) {
+            gpu_tmp[k] = (gpu_in_x[k] >= gpu_in_x[l]);
+            shmem[4 * tid] = gpu_tmp[k];
+            shmem[4 * tid + 1] = shmem[4 * tid] * gpu_in_y[tid];
+            shmem[4 * tid + 2] = (1 - shmem[4 * tid]) * gpu_in_y[tid];
+            // atomicAdd(&shmem[0], gpu_tmp[k]);
+        }
+        __syncthreads();
+        
+        // TODO: num_points better be even!
+        for (uint s = blockDim.x / 2; s > 2; s >>= 1) {
+            if (tid < s) {
+                shmem[tid] += shmem[tid + s];
             }
-            
-            // TODO: num_points better be even!
-            for (uint s = blockDim.x / 2; s > 2; s >>= 1) {
-                if (tid < s) {
-                    shmem[tid] += shmem[tid + s];
-                }
-                __syncthreads();
-            }
+            __syncthreads();
+        }
 
-            if (tid == 0) {
-                part1_n = shmem[0];
-                part2_n = num_points - part1_n;
-                part1_y = shmem[1] / (part1_n + 0.00001);
-                part2_y = shmem[2] / (part2_n + 0.00001);
-                float part1_p = part1_n / num_points;
-                float result = GINI(part1_y) * part1_p + GINI(part2_y) * (1 - part1_p);
-                // purposely done w/blockIdx.x as row-indexer
-                gpu_out_x[blockIdx.x * num_points + col] = result;
-            }
-        }   
+        if (tid == 0) {
+            part1_n = shmem[0];
+            part2_n = num_points - part1_n;
+            part1_y = shmem[1] / (part1_n + SMALL);
+            part2_y = shmem[2] / (part2_n + SMALL);
+            float part1_p = part1_n / num_points;
+            float result = GINI(part1_y) * part1_p + GINI(part2_y) * (1 - part1_p);
+            // purposely done w/blockIdx.x as row-indexer
+            gpu_out_x[blockIdx.x * num_points + col] = result;
+        }
     }
 }
 

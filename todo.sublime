@@ -1,14 +1,11 @@
 TODO:
 
-1. add exit case in node_split when gain=0 or approx 0. then check if matches python or CPU versions
-    it did not
+1. add exit case in node_split when gain=0 or approx 0. then check if matches python or CPU versions (it did not)
 2. refactor into a class, put cublasHandle in class initialization
-    done
 3. write prediction and error functions. make gpu versions
-    done
 dont. use cublas for unc. sum(gpu_in_y)
-
 4. refactor io/helper functions out of rforest.cpp
+
 5. benchmark properly (cuda). support more than 1000 points and benchmark
 6. change class to do both cpu and gpu versions and time each
 7. does cublas have functions to aid split/partition?
@@ -21,3 +18,4 @@ dont. use cublas for unc. sum(gpu_in_y)
 14. create free(tree) func
 15. write predictions to csv file
 16. read predictions from proper csv file
+gpu_mode as bool

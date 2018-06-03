@@ -40,4 +40,4 @@ Times are in ms:
     CPU
         Tree ~ 1027, Transpose ~ 0.23, Loss ~ 0.007
     GPU2
-        Tree ~ 143, Tranpose ~ 0.11, Loss ~ 0.05
+        Tree ~ 108, Tranpose ~ 0.10, Loss ~ 0.05
