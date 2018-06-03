@@ -247,9 +247,9 @@ node *RandomForest::data_split(float *data, int num_points, bool v) {
     /* Get unc (uncertainty/impurity) in all the data (note that data[0] is 
     in y). */
     // TODO: do this in gpu mode
-    float y_true = 0.;
-    for (int r = 0; r < num_points; r++) {
-        y_true += data[r];
+    float y_true = 0.; // number of true y in this partition
+    for (int p = 0; p < num_points; p++) {
+        y_true += data[p];
     }
 
     /* If there is no impurity, then we cannot gain info, so return. */
@@ -267,13 +267,13 @@ if(!this->gpu_mode) {
     float info_loss;
 
     for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
-        for (int r = 0; r < num_points; r++) {
-            info_loss = this->get_info_loss(data, data + i, data[i + r], num_points);
+        for (int p = 0; p < num_points; p++) {
+            info_loss = this->get_info_loss(data, data + i, data[i + p], num_points);
             if (info_loss < n->gain) {
                 // printf("i%d, loss%f val%f\n", i, info_loss, data[i+r]);
                 n->gain = info_loss;
                 n->feature = i / num_points;
-                n->val = data[i + r];
+                n->val = data[i + p];
             }
         }
     }
@@ -330,11 +330,12 @@ if(!this->gpu_mode) {
     // if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     // exit(0);
 
+    // Set to the parition to be the mode of y, since no possible info gain
     if (n->gain <= 0.000) {
         n->feature = 0;
         n->val = (y_true * 2 > num_points);
     }
-    
+
     return n;
 }
 
@@ -358,28 +359,28 @@ node *RandomForest::node_split(float *data, int num_points) {
     }
 
     /* Partition data according to the split. */
-    int t_points = 0, f_points, tr = 0, fr = 0;
+    int t_points = 0, f_points, tp = 0, fp = 0;
     float *col = data + (num_points * n->feature);
 
     /* Compute number of rows in each partition. */
-    for (int r = 0; r < num_points; r++) t_points += (col[r] >= n->val);
+    for (int p = 0; p < num_points; p++) t_points += (col[p] >= n->val);
     f_points = num_points - t_points;
 
     float *t_data = (float *) malloc(t_points * this->num_features * sizeof(float));
     float *f_data = (float *) malloc(f_points * this->num_features * sizeof(float));
 
     /* Poor indexing, but faster than transposing back and forth. */
-    for (int r = 0; r < num_points; r++) {
-        if (col[r] >= n->val) {
+    for (int p = 0; p < num_points; p++) {
+        if (col[p] >= n->val) {
             for (int f = 0; f < this->num_features; f++) {
-                t_data[(t_points * f) + tr] = data[(num_points * f) + r];
+                t_data[(t_points * f) + tp] = data[(num_points * f) + p];
             }
-            tr++;
+            tp++;
         } else {
             for (int f = 0; f < this->num_features; f++) {
-                f_data[(f_points * f) + fr] = data[(num_points * f) + r];
+                f_data[(f_points * f) + fp] = data[(num_points * f) + p];
             }
-            fr++;
+            fp++;
         }
     }
     // if ((f_points == 0) || (t_points == 0)) {

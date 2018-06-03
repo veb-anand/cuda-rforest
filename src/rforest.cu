@@ -25,17 +25,17 @@
 
     if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
 
-    for (uint col = 0; col < num_points; col++) {
-        uint k = (blockIdx.x * num_points) + tid;
+    for (uint p = 0; p < num_points; p++) {
+        uint i = (blockIdx.x * num_points) + tid; // match to every element in gpu_in_x
 
-        // BLOCKSPECIFIC
-        uint l = (blockIdx.x * num_points) + col;
+        // BLOCKSPECIFIC:
+        uint j = (blockIdx.x * num_points) + p; // match to first point in every feature of gpu_in
 
         // ITERATE by THREADS_PER_BLOCK until we are done with num_points!
 
         if (tid < num_points) {
-            gpu_tmp[k] = (gpu_in_x[k] >= gpu_in_x[l]);
-            shmem[4 * tid] = gpu_tmp[k];
+            gpu_tmp[i] = (gpu_in_x[i] >= gpu_in_x[j]);
+            shmem[4 * tid] = gpu_tmp[i];
             shmem[4 * tid + 1] = shmem[4 * tid] * gpu_in_y[tid];
             shmem[4 * tid + 2] = (1 - shmem[4 * tid]) * gpu_in_y[tid];
             // atomicAdd(&shmem[0], gpu_tmp[k]);
@@ -58,7 +58,7 @@
             float part1_p = part1_n / num_points;
             float result = GINI(part1_y) * part1_p + GINI(part2_y) * (1 - part1_p);
             // purposely done w/blockIdx.x as row-indexer
-            gpu_out_x[blockIdx.x * num_points + col] = result;
+            gpu_out_x[blockIdx.x * num_points + p] = result;
         }
     }
 }
