@@ -24,9 +24,9 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
-#define NUM_POINTS 20
+#define NUM_POINTS 100
 #define NUM_FEATURES 5
-#define NUM_TREES 2
+#define NUM_TREES 10
 
 using namespace std;
 
@@ -52,6 +52,7 @@ protected:
     node *data_split(float *data, int num_points, bool v);
     node *node_split(float *data, int num_points);
     void build_forest();
+    float *sub_sample(float *data);
 
     float *data;
     int num_features;
@@ -60,6 +61,7 @@ protected:
 
     int num_trees;
     node **forest;
+    int sub_sample_size;
 
     cublasHandle_t cublasHandle;
     float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
@@ -73,8 +75,9 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     this->num_features = num_features; // includes y
     this->num_points = num_points;
     this->gpu_mode = gpu_mode;
-    this->num_trees = num_trees;
+    this->num_trees = num_trees; // TODO: take in from args.
     this->forest = NULL;
+    this->sub_sample_size = 50; // TODO: fix. if -1, do not subsample. take from args
 
     CUBLAS_CALL(cublasCreate(&cublasHandle));
 
@@ -89,8 +92,10 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     this->build_forest();
     printf("\nForest (%d) time: %f\n", num_trees, this->end_time());
 
-    print_tree(this->forest[0]); cout << endl << endl;
-    print_tree(this->forest[1]); cout << endl << endl;
+    for (int t = 0; t < MIN(num_trees, 3); t++) {
+        print_tree(this->forest[t]); cout << endl << endl;
+    }
+    // print_tree(this->forest[1]); cout << endl << endl;
 
     this->start_time();
     float *test_x = this->transpose(data + num_points, num_features - 1, num_points);
@@ -121,12 +126,34 @@ RandomForest::~RandomForest() {
     }
 }
 
+
+// with subsampling if this->sub_sample_size != -1
 void RandomForest::build_forest() {
     this->forest = (node **) malloc(this->num_trees * sizeof(node *));
 
-    for (int t = 0; t < this->num_trees; t++) {
-        this->forest[t] = this->node_split(this->data, this->num_points);
+    float *sub;
+    if (this->sub_sample_size != -1) {
+        sub = (float *) malloc(this->sub_sample_size * this->num_features * 
+            sizeof(float));
+        if (sub == NULL) malloc_err("build_forest");
     }
+
+    for (int t = 0; t < this->num_trees; t++) {
+        // create subsample of data
+        if (this->sub_sample_size != -1) {
+            for (int s = 0; s < this->sub_sample_size; s++) {
+                int p = rand() % num_points;
+                for (int f = 0; f < this->num_features; f++)
+                    sub[f * this->sub_sample_size + s] = this->data[f 
+                        * num_points + p];
+            }
+            this->forest[t] = this->node_split(sub, this->sub_sample_size);
+        } else {
+            this->forest[t] = this->node_split(this->data, this->num_points);
+        }
+    }
+    
+    free(sub);
 }
 
 void RandomForest::start_time() {
@@ -448,10 +475,10 @@ int main(int argc, char **argv) {
     float *data = read_csv(path, num_features, num_points, false);
 
     /* Do benchmarking. */
-    printf("\nCPU benchmarking:\n");
+    printf("\n************ CPU benchmarking: ************\n");
     RandomForest(data, num_features, num_points, num_trees, false);
     
-    printf("\n\nGPU/CUDA benchmarking:\n");
+    printf("\n\n************ GPU/CUDA benchmarking: ************\n");
     // RandomForest(data, num_features, num_points, num_trees, true);
 
     return 0;

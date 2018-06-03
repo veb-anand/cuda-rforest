@@ -70,7 +70,7 @@ inline void malloc_err(string where) {
 }
 
 inline void reading_err(int f, int p, int ef, int ep){
-    printf("ERROR: incorrect CSV dimensions. Expected (%d, %d) but got point at (%d, %d)\n", ep, ef, p, f);
+    printf("ERROR: incorrect CSV dimensions. Expected (%d, %d) but failed at point (%d, %d)\n", ep, ef, p, f);
     exit(0);
 }
 

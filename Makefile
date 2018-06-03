@@ -64,7 +64,7 @@ CPP_OBJ = $(notdir $(addsuffix .o, $(CPP_FILES)))
 default: run
 
 run: rforest
-	./rforest "data/data.csv" 20 5
+	./rforest "data/data.csv" 100 5
 
 rforest: $(CPP_OBJ) $(CUDA_OBJ) $(CUDA_OBJ_FILES)
 	$(GPP) $(FLAGS) -o rforest $(INCLUDE) $^ $(LIBS) 
