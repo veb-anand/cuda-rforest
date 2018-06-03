@@ -24,9 +24,11 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
+/* Set defaults unless user passed in arguments overriding these. */
 #define NUM_POINTS 100
 #define NUM_FEATURES 5
-#define NUM_TREES 10
+#define NUM_TREES 10 
+#define SUBSAMPLING_RATIO 0.3
 
 using namespace std;
 
@@ -36,7 +38,7 @@ class RandomForest
 {
 public:
     RandomForest(float *data, int num_features, int num_points, int num_trees, 
-        bool gpu_mode);
+        int max_depth, bool gpu_mode);
     ~RandomForest();
     float *predict(float *x, int num_points);
     float predict_point(float *point, node *n);
@@ -49,8 +51,8 @@ public:
 
 protected:
     float get_info_loss(float *y, float *col, float val, int num_points);
-    node *data_split(float *data, int num_points, bool v);
-    node *node_split(float *data, int num_points);
+    node *data_split(float *data, int num_points, bool no_split, bool v);
+    node *node_split(float *data, int num_points, int depth);
     void build_forest();
     float *sub_sample(float *data);
 
@@ -62,6 +64,7 @@ protected:
     int num_trees;
     node **forest;
     int sub_sample_size;
+    int max_depth;
 
     cublasHandle_t cublasHandle;
     float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
@@ -70,13 +73,14 @@ protected:
 
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        int num_trees, bool gpu_mode) {
+        int num_trees, int max_depth, bool gpu_mode) {
     this->data = data;
     this->num_features = num_features; // includes y
     this->num_points = num_points;
     this->gpu_mode = gpu_mode;
     this->num_trees = num_trees; // TODO: take in from args.
     this->forest = NULL;
+    this->max_depth = max_depth;
     this->sub_sample_size = 50; // TODO: fix. if -1, do not subsample. take from args
 
     CUBLAS_CALL(cublasCreate(&cublasHandle));
@@ -147,9 +151,9 @@ void RandomForest::build_forest() {
                     sub[f * this->sub_sample_size + s] = this->data[f 
                         * num_points + p];
             }
-            this->forest[t] = this->node_split(sub, this->sub_sample_size);
+            this->forest[t] = this->node_split(sub, this->sub_sample_size, 0);
         } else {
-            this->forest[t] = this->node_split(this->data, this->num_points);
+            this->forest[t] = this->node_split(this->data, this->num_points, 0);
         }
     }
     
@@ -291,7 +295,7 @@ else {
 
 /* Find optimal split in the data (by attribute and by val) that minimizes 
 impurity. */
-node *RandomForest::data_split(float *data, int num_points, bool v) {
+node *RandomForest::data_split(float *data, int num_points, bool no_split, bool v) {
     node *n = new node;
 
     /* Get unc (uncertainty/impurity) in all the data (note that data[0] is 
@@ -303,9 +307,9 @@ node *RandomForest::data_split(float *data, int num_points, bool v) {
     }
 
     /* If there is no impurity, then we cannot gain info, so return. */
-    if ((y_true < 1.) || (y_true > num_points - 1)) { // TODO: point of potential failure
+    if (no_split || (y_true < 1.) || (y_true > num_points - 1)) { // TODO: point of potential failure
         n->feature = 0;
-        n->val = (y_true > num_points - 1);
+        n->val = (y_true * 2) > num_points;
         return n;
     }
     
@@ -390,7 +394,7 @@ if(!this->gpu_mode) {
 }
 
 
-node *RandomForest::node_split(float *data, int num_points) {
+node *RandomForest::node_split(float *data, int num_points, int depth) {
     /* Find the optimal split in the data. */
     // TODO: in function, use gpu based on num_points & num_features
     // node *n = this->data_split(data, num_points, false);
@@ -400,7 +404,7 @@ node *RandomForest::node_split(float *data, int num_points) {
     // node *n = this->data_split(data, num_points, false);
     // printf("C-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
     // this->gpu_mode = true;
-    node *n = this->data_split(data, num_points, false);
+    node *n = this->data_split(data, num_points, (depth >= this->max_depth), false);
     // printf("G-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     /* Split did not help increase information, so stop. */
@@ -444,9 +448,9 @@ node *RandomForest::node_split(float *data, int num_points) {
     //     // return n;
     // }
 
-    n->false_branch = this->node_split(f_data, f_points);
+    n->false_branch = this->node_split(f_data, f_points, depth + 1);
     free(f_data);
-    n->true_branch = this->node_split(t_data, t_points);
+    n->true_branch = this->node_split(t_data, t_points, depth + 1);
     free(t_data);
 
     return n;
@@ -459,27 +463,45 @@ int main(int argc, char **argv) {
     // int num_features = NUM_FEATURES, num_points = NUM_POINTS;
     
     /* Check number of arguments and parse them. */
-    if (argc < 4) {
+    if (argc < 2) {
         printf("Incorrect number of arguments passed in (%d).\n"
-           "Usage: ./rforest <path of csv> <# points> <# features>"
-           "(<# of trees)\n", argc);
+           "Usage: ./rforest <path of csv> [-s/--size <# points> <# features>] "
+           "[-t/--trees <# of trees>] [-d/--depth <max depth of trees>]\n", 
+           argc);
         exit(0);
     }
     string path = argv[1];
-    int num_points = atoi(argv[2]);
-    int num_features = atoi(argv[3]);
+    int num_points = NUM_POINTS;
+    int num_features = NUM_FEATURES;
     int num_trees = NUM_TREES;
-    if (argc > 4) num_trees = atoi(argv[4]);
+    int max_depth = int(NUM_POINTS * SUBSAMPLING_RATIO);
+    for (int i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--size") == 0 || strcmp(argv[i], "-s") == 0) {
+            i++;
+            if (i + 1 < argc) {
+                num_points = atoi(argv[i]);
+                i++;
+                num_features = atoi(argv[i]);
+            }
+        } else if (strcmp(argv[i], "--trees") == 0 || strcmp(argv[i], "-t") == 0) {
+            i++;
+            if (i < argc) num_trees = atoi(argv[i]);
+        } else if (strcmp(argv[i], "--depth") == 0 || strcmp(argv[i], "-d") == 0) {
+            i++;
+            if (i < argc) max_depth = atoi(argv[i]);
+        }
+    }
 
     /* Read in data from path. */
     float *data = read_csv(path, num_features, num_points, false);
 
+
     /* Do benchmarking. */
     printf("\n************ CPU benchmarking: ************\n");
-    RandomForest(data, num_features, num_points, num_trees, false);
+    RandomForest(data, num_features, num_points, num_trees, max_depth, false);
     
     printf("\n\n************ GPU/CUDA benchmarking: ************\n");
-    // RandomForest(data, num_features, num_points, num_trees, true);
+    // RandomForest(data, num_features, num_points, num_trees, max_depth, true);
 
     return 0;
 }
