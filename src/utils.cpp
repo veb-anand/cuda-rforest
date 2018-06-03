@@ -56,26 +56,46 @@ void print_vector(float *data, int num_points) {
     cout << endl;
 }
 
+inline void reading_err(int f, int p, int ef, int ep){
+    printf("ERROR: incorrect CSV dimensions. Expected (%d, %d) but got point at (%d, %d)\n", ep, ef, p, f);
+    exit(1);
+}
+
+/* Expects file to be stored in comma-delimitered, point-major format with y as the first column. */
 float *read_csv(string path, int num_features, int num_points, bool verbose) {
     float *data = (float *) malloc(num_features * num_points * sizeof(float));
 
     ifstream f(path);
 
-    if(!f.is_open()) std::cout << "ERROR: File Open" << '\n';
+    if(!f.is_open()) cout << "ERROR: File Open" << '\n';
 
-    string num_str;
-    int index = 0;
+    string line;
+    char* token;
+    const char delimiter[2] = ",";
+    int feat, p = 0;
 
-    for (int i = 0; i < (num_points * num_features); i++) {
-        getline(f, num_str, ',');
-        data[index++] = atof(num_str.c_str());
+    while(getline(f, line)) {
+        token = strtok((char *) line.c_str(), delimiter);
+        feat = 0;
+        do {
+            data[num_points * feat + p] = atof(token);
+            feat++;
+            token = strtok(NULL, delimiter);
+        } while (token != NULL);
+        if (feat != num_features) 
+            reading_err(feat, p, num_features, num_points);
+
+        p++;
     }
+    if (p != num_points) 
+        reading_err(feat, p, num_features, num_points);
 
     f.close();
 
+    printf("\nSuccesfully read in data(features:%d, rows:%d):\n", 
+        num_features, num_points);
+
     if (verbose) {
-        printf("\nSuccesfully read in data(features:%d, rows:%d):\n", 
-            num_features, num_points);
         print_matrix(data, num_features, num_points);
         cout << endl;
     }

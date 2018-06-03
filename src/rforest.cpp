@@ -24,8 +24,8 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
-#define NUM_POINTS 100
-#define NUM_FEATURES 10
+#define NUM_POINTS 20
+#define NUM_FEATURES 5
 
 using namespace std;
 
@@ -138,12 +138,12 @@ float RandomForest::get_info_loss(float *y, float *col, float val, int num_point
     float part2_y = 0.;  //sum of y where col < val (partition 2)
     float part2_n = SMALL;  // number of rows where col < val
 
-    for (int r = 0; r < num_points; r++) {
-        if (col[r] >= val) {
-            part1_y += y[r];
+    for (int p = 0; p < num_points; p++) {
+        if (col[p] >= val) {
+            part1_y += y[p];
             part1_n += 1.;
         } else {
-            part2_y += y[r];
+            part2_y += y[p];
             part2_n += 1.;
         }
     }
@@ -160,23 +160,24 @@ float RandomForest::get_info_loss(float *y, float *col, float val, int num_point
 
 float RandomForest::predict_point(float *point, node *n) {
     // TODO: convert this into (!n->feature)
-    if (n->feature == 0) {
+    if (n->feature == 0)
         return n->val;
-    }
-    if (point[n->feature - 1] >= n->val) {
+    
+    if (point[n->feature - 1] >= n->val)
         return predict_point(point, n->true_branch);
-    } else {
+    else
         return predict_point(point, n->false_branch);
-    }
 }
 
 // Takes data without y vector in point-major order (feature-major everywhere else)
 // also num_features is number of columns in x.
 float *RandomForest::predict(float *x, int num_points, node *n) {
     float *y = (float *) malloc(num_points * sizeof(float));
+    
     for (int p = 0; p < num_points; p++) {
         y[p] = predict_point(x + p * (this->num_features - 1), n);
     }
+
     return y;
 }
 
@@ -186,14 +187,15 @@ float RandomForest::get_mse_loss(float *y, float *preds, int num_points) {
     // if gpu mode and we have enough room in pre-allocated gpu_in_y and gpu_tmp, then use cublas
 if ((this->gpu_mode) && (num_points <= this->num_points)) {
     float negone = -1.0;
+    
     CUDA_CALL(cudaMemcpy(this->gpu_in_y, y, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
     CUDA_CALL(cudaMemcpy(this->gpu_tmp, preds, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
+    
     CUBLAS_CALL(cublasSaxpy(this->cublasHandle, num_points, &negone, this->gpu_tmp, 1, 
         this->gpu_in_y, 1));
     CUBLAS_CALL(cublasSnrm2(this->cublasHandle, num_points, this->gpu_in_y, 1, &loss));
-    loss *= loss;
 } 
 else {
     if (this->gpu_mode) {
