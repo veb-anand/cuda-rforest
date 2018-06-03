@@ -24,7 +24,7 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
-#define GPU_MODE true
+#define GPU_MODE false
 #define NUM_POINTS 1000
 #define NUM_FEATURES 50
 
@@ -304,21 +304,21 @@ if(!this->gpu_mode) {
         this->gpu_out_x, f, num_points);
     int result;
 
-    if (v) {
-        float *data2 = (float *) malloc(size_x * sizeof(float));
-        CUDA_CALL(cudaMemcpy(data2, this->gpu_out_x, size_x * sizeof(float), 
-            cudaMemcpyDeviceToHost));
-        // print_matrix(data, f, 5);
-        // print_matrix(data2, f, 5);
-        // printf("Index: %d %d %d %f %d\n", result, (result % f + 1), (result / f), data2[result], num_points);
-        for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
-            for (int r = 0; r < 5; r++) {
-                int info_loss = this->get_info_loss(data, data + i, data[i + r], num_points);
-                printf("cpu: %f, gpu:%f\n", info_loss, data2[i + r - num_points]);
-            }
-        }
-        free(data2);
-    }
+    // if (v) {
+    //     float *data2 = (float *) malloc(size_x * sizeof(float));
+    //     CUDA_CALL(cudaMemcpy(data2, this->gpu_out_x, size_x * sizeof(float), 
+    //         cudaMemcpyDeviceToHost));
+    //     // print_matrix(data, f, 5);
+    //     // print_matrix(data2, f, 5);
+    //     // printf("Index: %d %d %d %f %d\n", result, (result % f + 1), (result / f), data2[result], num_points);
+    //     for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
+    //         for (int r = 0; r < 5; r++) {
+    //             int info_loss = this->get_info_loss(data, data + i, data[i + r], num_points);
+    //             printf("cpu: %f, gpu:%f\n", info_loss, data2[i + r - num_points]);
+    //         }
+    //     }
+    //     free(data2);
+    // }
 
     CUBLAS_CALL(cublasIsamin(this->cublasHandle, size_x, this->gpu_out_x, 1, 
         &result));
@@ -330,9 +330,9 @@ if(!this->gpu_mode) {
     n->val = data[result];
 
 }
-    if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
+    // if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     n->gain = unc - n->gain;
-    if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
+    // if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     // exit(0);
 
     return n;
@@ -349,7 +349,7 @@ node *RandomForest::node_split(float *data, int num_points) {
     // node *n = this->data_split(data, num_points, false);
     // printf("C-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
     // this->gpu_mode = true;
-    n = this->data_split(data, num_points, false);
+    node *n = this->data_split(data, num_points, false);
     // printf("G-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     /* Split did not help increase information, so stop. */
