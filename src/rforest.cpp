@@ -24,9 +24,8 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
-#define GPU_MODE false
-#define NUM_POINTS 1000
-#define NUM_FEATURES 50
+#define NUM_POINTS 100
+#define NUM_FEATURES 10
 
 using namespace std;
 
@@ -83,9 +82,6 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     // print_matrix(t, num_points, num_features - 1);
     // return;
 
-    if (gpu_mode) printf("GPU/CUDA benchmarking:\n");
-    else          printf("CPU benchmarking:\n");
-
     // clock_t time_a = clock();
     this->start_time();
     node *tree = this->node_split(data, num_points);
@@ -102,9 +98,6 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     this->start_time();
     printf("\n\tTraining loss: %f\n", this->get_mse_loss(data, preds, num_points));
     printf("\nLoss time: %f\n", this->end_time()); // (uint)(clock() - time_a)
-
-    cout << "Finished!" << endl;
-
 }
 
 RandomForest::~RandomForest() {
@@ -418,7 +411,11 @@ int main(int argc, char **argv) {
     // create_random_data(3, 5);
     int num_features = NUM_FEATURES, num_points = NUM_POINTS;
     float *data = read_csv("data/data.csv", num_features, num_points, false);
-    RandomForest(data, num_features, num_points, GPU_MODE);
+
+    printf("\nCPU benchmarking:\n");
+    RandomForest(data, num_features, num_points, false);
+    printf("\n\nGPU/CUDA benchmarking:\n");
+    // RandomForest(data, num_features, num_points, true);
 
     return 0;
 }
