@@ -3,8 +3,10 @@ TODO:
 1. add exit case in node_split when gain=0 or approx 0. then check if matches python or CPU versions
     it did not
 2. refactor into a class, put cublasHandle in class initialization
-3. write prediction and error functions
-4. support more than 1000 points and benchmark
+    done
+3. write prediction and error functions. make gpu versions
+    done first part.
+4. benchmark properly (cuda). support more than 1000 points and benchmark
 5. use cublas for unc. sum(gpu_in_y)
 6. change class to do both cpu and gpu versions and time each
 7. does cublas have functions to aid split/partition?
