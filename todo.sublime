@@ -11,8 +11,8 @@ dont. use cublas for unc. sum(gpu_in_y)
 7. have dataset name be taking by args
 8. get val in gpu mode from mean
 9. rename "col/row" to "point/feature" where appropriate
-
 10. create free(tree) func
+
 11. convert tree to forest (w/random sampling from data (based on benchmarks?))
 12. create depth limit to each tree (prevent over-training)
 13. does cublas have functions to aid split/partition?

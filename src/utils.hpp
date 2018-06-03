@@ -30,6 +30,9 @@ void print_node(node *n);
 
 void print_tree(node *n);
 
+void free_tree(node *n);
+
+void malloc_err(string where);
 
 /****** IO FUNCTIONS ******/
 void print_matrix(float *data, int num_features, int num_points);

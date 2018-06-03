@@ -32,6 +32,14 @@ void print_tree(node *n) {
     cout << ")";
 }
 
+void free_tree(node *n) {
+    if (n->feature != 0) {
+        free_tree(n->true_branch);
+        free_tree(n->false_branch);
+    }
+    delete n;
+}
+
 
 /****** IO FUNCTIONS ******/
 
@@ -56,6 +64,11 @@ void print_vector(float *data, int num_points) {
     cout << endl;
 }
 
+inline void malloc_err(string where) {
+    printf("Error: malloc() in %s()\n", where.c_str());
+    exit(1);
+}
+
 inline void reading_err(int f, int p, int ef, int ep){
     printf("ERROR: incorrect CSV dimensions. Expected (%d, %d) but got point at (%d, %d)\n", ep, ef, p, f);
     exit(0);
@@ -64,6 +77,7 @@ inline void reading_err(int f, int p, int ef, int ep){
 /* Expects file to be stored in comma-delimited, point-major format with y as the first column. */
 float *read_csv(string path, int num_features, int num_points, bool verbose) {
     float *data = (float *) malloc(num_features * num_points * sizeof(float));
+    if (data == NULL) malloc_err("read_csv");
 
     ifstream f(path);
 

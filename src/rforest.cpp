@@ -26,6 +26,7 @@
 */
 #define NUM_POINTS 20
 #define NUM_FEATURES 5
+#define NUM_TREES 2
 
 using namespace std;
 
@@ -34,9 +35,10 @@ using namespace std;
 class RandomForest
 {
 public:
-    RandomForest(float *data, int num_features, int num_points, bool gpu_mode);
+    RandomForest(float *data, int num_features, int num_points, int num_trees, 
+        bool gpu_mode);
     ~RandomForest();
-    float *predict(float *x, int num_points, node *n);
+    float *predict(float *x, int num_points);
     float predict_point(float *point, node *n);
 
     // these functions are relatively generic but are included because they contain personalized cuda versions
@@ -49,11 +51,15 @@ protected:
     float get_info_loss(float *y, float *col, float val, int num_points);
     node *data_split(float *data, int num_points, bool v);
     node *node_split(float *data, int num_points);
+    void build_forest();
 
     float *data;
     int num_features;
     int num_points;
     bool gpu_mode;
+
+    int num_trees;
+    node **forest;
 
     cublasHandle_t cublasHandle;
     float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
@@ -62,11 +68,13 @@ protected:
 
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        bool gpu_mode) {
+        int num_trees, bool gpu_mode) {
     this->data = data;
     this->num_features = num_features; // includes y
     this->num_points = num_points;
     this->gpu_mode = gpu_mode;
+    this->num_trees = num_trees;
+    this->forest = NULL;
 
     CUBLAS_CALL(cublasCreate(&cublasHandle));
 
@@ -77,23 +85,20 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     CUDA_CALL(cudaMalloc((void **) &this->gpu_tmp, size_x * sizeof(float)));
     CUDA_CALL(cudaMalloc((void **) &this->gpu_out_x, size_x * sizeof(float)));
 
-    // print_matrix(data + num_points, num_features - 1, num_points);
-    // float *t = transpose(data + num_points, num_features - 1, num_points);
-    // print_matrix(t, num_points, num_features - 1);
-    // return;
-
-    // clock_t time_a = clock();
     this->start_time();
-    node *tree = this->node_split(data, num_points);
+    this->build_forest();
+    printf("\nForest (%d) time: %f\n", num_trees, this->end_time());
 
-    print_tree(tree); cout << endl << endl;
-    printf("\nTree time: %f\n", this->end_time()); // (uint)(clock() - time_a)
+    print_tree(this->forest[0]); cout << endl << endl;
+    print_tree(this->forest[1]); cout << endl << endl;
 
     this->start_time();
     float *test_x = this->transpose(data + num_points, num_features - 1, num_points);
     printf("\nTranspose time: %f\n", this->end_time()); // (uint)(clock() - time_a)
     // print_vector(data, num_points);
-    float *preds = this->predict(test_x, num_points, tree);
+    this->start_time();
+    float *preds = this->predict(test_x, num_points);
+    printf("\nPredict time: %f\n", this->end_time()); // (uint)(clock() - time_a)
     // print_vector(preds, num_points);
     this->start_time();
     printf("\n\tTraining loss: %f\n", this->get_mse_loss(data, preds, num_points));
@@ -109,9 +114,20 @@ RandomForest::~RandomForest() {
     CUDA_CALL(cudaFree(this->gpu_tmp));
     CUDA_CALL(cudaFree(this->gpu_out_x));
     CUBLAS_CALL(cublasDestroy(this->cublasHandle));
+
+    // free forest
+    if (this->forest != NULL) {
+        for (int t = 0; t < this->num_trees; t++) free_tree(forest[t]);
+    }
 }
 
+void RandomForest::build_forest() {
+    this->forest = (node **) malloc(this->num_trees * sizeof(node *));
 
+    for (int t = 0; t < this->num_trees; t++) {
+        this->forest[t] = this->node_split(this->data, this->num_points);
+    }
+}
 
 void RandomForest::start_time() {
     CUDA_CALL(cudaEventCreate(&this->start));
@@ -171,13 +187,18 @@ float RandomForest::predict_point(float *point, node *n) {
 
 // Takes data without y vector in point-major order (feature-major everywhere else)
 // also num_features is number of columns in x.
-float *RandomForest::predict(float *x, int num_points, node *n) {
+float *RandomForest::predict(float *x, int num_points) {
     float *y = (float *) malloc(num_points * sizeof(float));
-    
-    for (int p = 0; p < num_points; p++) {
-        y[p] = predict_point(x + p * (this->num_features - 1), n);
-    }
+    if (y == NULL)  malloc_err("predict");
 
+    for (int p = 0; p < num_points; p++) {
+        for (int t = 0; t < num_trees; t++) {
+            y[p] += predict_point(x + p * (this->num_features - 1), 
+                this->forest[t]);
+        }
+        y[p] = (y[p] * 2) > num_trees; // get mode
+    }
+    
     return y;
 }
 
@@ -214,6 +235,8 @@ else {
 // Returns transpose of matrix (not in-place). Uses gpu if GPU_MODE
 float *RandomForest::transpose(float *data, int num_rows, int num_cols) {
     float *t = (float *) malloc(num_rows * num_cols * sizeof(float));
+    if (t == NULL) malloc_err("transpose");
+
     int size = num_rows * num_cols;
 
 if ((this->gpu_mode) && ((this->num_features - 1) * this->num_points >= size)) {
@@ -333,7 +356,7 @@ if(!this->gpu_mode) {
     // Set to the parition to be the mode of y, since no possible info gain
     if (n->gain <= 0.000) {
         n->feature = 0;
-        n->val = (y_true * 2 > num_points);
+        n->val = (y_true * 2) > num_points;
     }
 
     return n;
@@ -368,6 +391,7 @@ node *RandomForest::node_split(float *data, int num_points) {
 
     float *t_data = (float *) malloc(t_points * this->num_features * sizeof(float));
     float *f_data = (float *) malloc(f_points * this->num_features * sizeof(float));
+    if ((t_data == NULL) || (f_data == NULL)) malloc_err("node_split");
 
     /* Poor indexing, but faster than transposing back and forth. */
     for (int p = 0; p < num_points; p++) {
@@ -408,24 +432,27 @@ int main(int argc, char **argv) {
     // int num_features = NUM_FEATURES, num_points = NUM_POINTS;
     
     /* Check number of arguments and parse them. */
-    if (argc != 4) {
+    if (argc < 4) {
         printf("Incorrect number of arguments passed in (%d).\n"
-           "Usage: ./rforest <path of csv> <# points> <# features>\n", argc);
+           "Usage: ./rforest <path of csv> <# points> <# features>"
+           "(<# of trees)\n", argc);
         exit(0);
     }
     string path = argv[1];
     int num_points = atoi(argv[2]);
     int num_features = atoi(argv[3]);
+    int num_trees = NUM_TREES;
+    if (argc > 4) num_trees = atoi(argv[4]);
 
     /* Read in data from path. */
     float *data = read_csv(path, num_features, num_points, false);
 
     /* Do benchmarking. */
     printf("\nCPU benchmarking:\n");
-    RandomForest(data, num_features, num_points, false);
+    RandomForest(data, num_features, num_points, num_trees, false);
     
     printf("\n\nGPU/CUDA benchmarking:\n");
-    // RandomForest(data, num_features, num_points, true);
+    // RandomForest(data, num_features, num_points, num_trees, true);
 
     return 0;
 }
