@@ -7,7 +7,7 @@ CUDA_OBJ = cuda.o
 
 # Input Names
 CUDA_FILES = src/rforest.cu
-CPP_FILES = src/rforest.cpp
+CPP_FILES = src/rforest.cpp src/utils.cpp
 
 # ------------------------------------------------------------------------------
 
@@ -88,6 +88,6 @@ $(CUDA_OBJ): $(CUDA_OBJ_FILES)
 
 # Clean everything including temporary Emacs files
 clean:
-	rm -f rforest src/*.o *~
+	rm -f rforest *.o *~
 
 .PHONY: clean

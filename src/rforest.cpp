@@ -1,16 +1,13 @@
 /* 
  * Random Forest
- * Vaibhav Anand, 20148
+ * Vaibhav Anand, 2018
  */
 
 #include <cstdio>
 #include <cstdlib>
-#include <cmath>
-#include <cstring>
-#include <vector>
-#include <fstream>
-#include <iostream>
-#include <time.h>
+// #include <cmath>
+// #include <cstring>
+// #include <time.h>
 #include <string.h>
 #include <ctime>
 #include <cassert>
@@ -19,11 +16,9 @@
 #include <cublas_v2.h>
 
 #include "helper_cuda.h"
+#include "utils.hpp"
 #include "rforest.cuh"
 
-#define VERBOSE false
-#define SMALL 0.00001
-#define GINI(x) (1 - x * x - (1 - x) * (1 - x))
 
 /* GPU_MODE = 
     0: use cpu for every operation
@@ -34,93 +29,6 @@
 #define NUM_FEATURES 50
 
 using namespace std;
-
-#define IDX2C(i,j,ld) (((j)*(ld))+(i))
-
-/* Checks the passed-in arguments for validity. */
-void check_args(int argc, char **argv) {
-}
-
-
-
-/***** NODE Functions. */
-
-struct node {
-    int feature; // if feature = 0, then all values are "val". no further splits.
-    float val;
-    float gain;
-    node *false_branch;
-    node *true_branch;
-};
-
-void print_node(node *n) {
-    printf("Node structure: feature=%d, val=%.4f\n\n",
-        n->feature, n->val);
-}
-
-void print_tree(node *n) {
-    if (n->feature == 0) {
-        cout << n->val;
-        return;
-    }
-    printf("(%d, %f, ", n->feature, n->val);
-    print_tree(n->true_branch);
-    cout << ", ";
-    print_tree(n->false_branch);
-    cout << ")";
-}
-
-
-
-/****** IO FUNCTIONS ******/
-
-void print_matrix(float *data, int num_features, int num_points) {
-    int i, j, index = 0;
-    for (i = 0; i < num_features; i++) {
-        if (i == 0) cout << "Y:\n";
-        
-        for (j = 0; j < num_points; j++) {
-            printf("%.6f ", data[index++]);
-        }
-
-        if (i == 0) cout << "\n\nX:";
-        cout << endl;
-    }
-}
-
-void print_vector(float *data, int num_points) {
-    for (int i = 0; i < num_points; i++) {
-        printf("%.6f ", data[i]);
-    }
-    cout << endl;
-}
-
-float *read_csv(string path, int num_features, int num_points) {
-    float *data = (float *) malloc(num_features * num_points * sizeof(float));
-
-    ifstream f(path);
-
-    if(!f.is_open()) std::cout << "ERROR: File Open" << '\n';
-
-    string num_str;
-    int index = 0;
-
-    for (int i = 0; i < (num_points * num_features); i++) {
-        getline(f, num_str, ',');
-        data[index++] = atof(num_str.c_str());
-    }
-
-    f.close();
-
-    if (VERBOSE) {
-        printf("\nSuccesfully read in data(features:%d, rows:%d):\n", 
-            num_features, num_points);
-        print_matrix(data, num_features, num_points);
-        cout << endl;
-    }
-
-    return data;
-}
 
 
 
@@ -349,9 +257,9 @@ node *RandomForest::data_split(float *data, int num_points) {
     }
 
     /* If there is no impurity, then we cannot gain info, so return. */
-    if ((unc == 0.) || (unc == num_points)) { // TODO: point of potential failure
+    if ((unc < 1.) || (unc > num_points - 1)) { // TODO: point of potential failure
         n->feature = 0;
-        n->val = data[0];
+        n->val = (unc > num_points - 1);
         return n;
     }
     
@@ -391,8 +299,8 @@ if(this->gpu_mode == 0) {
         cudaMemcpyHostToDevice));
 
     /* Compute information gains. */
-    cuda_call_mat_gt_y(this->gpu_in_x, this->gpu_in_y, this->gpu_tmp, 
-        this->gpu_out_x, size_x, num_points);
+    cuda_call_get_losses(this->gpu_in_x, this->gpu_in_y, this->gpu_tmp, 
+        this->gpu_out_x, f, num_points);
     int result;
     CUBLAS_CALL(cublasIsamin(this->cublasHandle, size_x, this->gpu_out_x, 1, 
         &result));
@@ -479,10 +387,16 @@ node *RandomForest::node_split(float *data, int num_points) {
 
 
 
+
+/* Checks the passed-in arguments for validity. */
+void check_args(int argc, char **argv) {
+}
+
+
 int main(int argc, char **argv) {
     // create_random_data(3, 5);
     int num_features = NUM_FEATURES, num_points = NUM_POINTS;
-    float *data = read_csv("data/data.csv", num_features, num_points);
+    float *data = read_csv("data/data.csv", num_features, num_points, false);
     RandomForest(data, num_features, num_points, GPU_MODE);
 
     return 0;

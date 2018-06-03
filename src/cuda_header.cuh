@@ -1,6 +1,5 @@
 /* 
  * CUDA cuda_header
- * Loko Kung, 2018
  */
 
 #ifndef CUDA_HEADER_CUH_
