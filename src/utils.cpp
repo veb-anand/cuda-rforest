@@ -58,10 +58,10 @@ void print_vector(float *data, int num_points) {
 
 inline void reading_err(int f, int p, int ef, int ep){
     printf("ERROR: incorrect CSV dimensions. Expected (%d, %d) but got point at (%d, %d)\n", ep, ef, p, f);
-    exit(1);
+    exit(0);
 }
 
-/* Expects file to be stored in comma-delimitered, point-major format with y as the first column. */
+/* Expects file to be stored in comma-delimited, point-major format with y as the first column. */
 float *read_csv(string path, int num_features, int num_points, bool verbose) {
     float *data = (float *) malloc(num_features * num_points * sizeof(float));
 

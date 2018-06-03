@@ -404,18 +404,27 @@ node *RandomForest::node_split(float *data, int num_points) {
 
 
 
-/* Checks the passed-in arguments for validity. */
-void check_args(int argc, char **argv) {
-}
-
-
 int main(int argc, char **argv) {
-    // create_random_data(3, 5);
-    int num_features = NUM_FEATURES, num_points = NUM_POINTS;
-    float *data = read_csv("data/data.csv", num_features, num_points, false);
+    check_args(argc, argv);
+    // int num_features = NUM_FEATURES, num_points = NUM_POINTS;
+    
+    /* Check number of arguments and parse them. */
+    if (argc != 4) {
+        printf("Incorrect number of arguments passed in (%d).\n"
+           "Usage: ./rforest <path of csv> <# points> <# features>\n", argc);
+        exit(0);
+    }
+    string path = argv[1];
+    int num_points = atoi(argv[2]);
+    int num_features = atoi(argv[3]);
 
+    /* Read in data from path. */
+    float *data = read_csv(path, num_features, num_points, false);
+
+    /* Do benchmarking. */
     printf("\nCPU benchmarking:\n");
     RandomForest(data, num_features, num_points, false);
+    
     printf("\n\nGPU/CUDA benchmarking:\n");
     // RandomForest(data, num_features, num_points, true);
 
