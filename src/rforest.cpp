@@ -143,7 +143,11 @@ protected:
     int num_features;
     int num_points;
     int gpu_mode;
+
+    cublasHandle_t cublasHandle;
+    float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
 };
+
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
         int gpu_mode) {
@@ -152,13 +156,21 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     this->num_points = num_points;
     this->gpu_mode = gpu_mode;
 
+    CUBLAS_CALL(cublasCreate(&cublasHandle));
+
+    /* Allocate arrays/matrices on gpu. Allocate with the largest size that they will be used for. */
+    int size_x = (num_features - 1) * num_points;
+    CUDA_CALL(cudaMalloc((void **) &this->gpu_in_x, size_x * sizeof(float)));
+    CUDA_CALL(cudaMalloc((void **) &this->gpu_in_y, num_points * sizeof(float)));
+    CUDA_CALL(cudaMalloc((void **) &this->gpu_tmp, size_x * sizeof(float)));
+    CUDA_CALL(cudaMalloc((void **) &this->gpu_out_x, size_x * sizeof(float)));
 
     // print_matrix(data, num_features, num_points);
     // float *t = transpose(data, num_features, num_points);
     // print_matrix(t, num_points, num_features);
     // return 0;
 
-    cout << "version:\n";
+    cout << "GPU mode: " << gpu_mode << endl;
 
     clock_t time_a = clock();
     node *tree = this->node_split(data, num_points);
@@ -173,18 +185,19 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     print_vector(preds, num_points);
     printf("Training loss: %f\n", this->get_mse_loss(data, preds));
 
-    // cout << "\nFinished split:\nTrue data:\n";
-    // print_matrix(t_data, num_features, t_rows);
-    // cout << "\nFalse data:\n";
-    // print_matrix(f_data, num_features, f_rows);
-
     cout << "Finished!" << endl;
 
 }
 
 RandomForest::~RandomForest() {
     // TODO: make sure that everything is freed
+    free(this->data);
 
+    CUDA_CALL(cudaFree(this->gpu_in_x));
+    CUDA_CALL(cudaFree(this->gpu_in_y));
+    CUDA_CALL(cudaFree(this->gpu_tmp));
+    CUDA_CALL(cudaFree(this->gpu_out_x));
+    CUBLAS_CALL(cublasDestroy(this->cublasHandle));
 }
 
 
@@ -254,7 +267,7 @@ float RandomForest::get_mse_loss(float *y, float *preds) {
 float *RandomForest::transpose(float *data, int num_rows, int num_cols) {
     float *t = (float *) malloc(num_rows * num_cols * sizeof(float));
 
-// if (GPU_MODE) {
+// if (this->gpu_mode) {
     // use cublasSgeam() w/alpha=1 and beta=0    
 // }
     for (int i = 0; i < num_rows; i++) {
@@ -288,8 +301,7 @@ node *RandomForest::data_split(float *data, int num_points) {
     
     unc = GINI(unc / num_points);
 
-if(GPU_MODE == 0) {
-
+if(this->gpu_mode == 0) {
     /* Now, determine what split causes the smallest information loss. */
     n->gain = unc;
     float info_loss;
@@ -305,17 +317,8 @@ if(GPU_MODE == 0) {
         }
     }
 } else {
-    cublasHandle_t cublasHandle;
-    CUBLAS_CALL(cublasCreate(&cublasHandle));
     int f = this->num_features - 1;
     int size_x = f * num_points;
-
-    /* Allocate arrays/matrices on gpu. */
-    float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
-    CUDA_CALL(cudaMalloc((void **) &gpu_in_x, size_x * sizeof(float)));
-    CUDA_CALL(cudaMalloc((void **) &gpu_in_y, num_points * sizeof(float)));
-    CUDA_CALL(cudaMalloc((void **) &gpu_tmp, size_x * sizeof(float)));
-    CUDA_CALL(cudaMalloc((void **) &gpu_out_x, size_x * sizeof(float)));
 
     /* Copy data into inputs. */
     CUDA_CALL(cudaMemcpy(gpu_in_x, data + num_points, size_x * sizeof(float), 
@@ -324,9 +327,11 @@ if(GPU_MODE == 0) {
         cudaMemcpyHostToDevice));
 
     /* Compute information gains. */
-    cuda_call_mat_gt_y(gpu_in_x, gpu_in_y, gpu_tmp, gpu_out_x, size_x, num_points);
+    cuda_call_mat_gt_y(this->gpu_in_x, this->gpu_in_y, this->gpu_tmp, 
+        this->gpu_out_x, size_x, num_points);
     int result;
-    CUBLAS_CALL(cublasIsamin(cublasHandle, size_x, gpu_out_x, 1, &result));
+    CUBLAS_CALL(cublasIsamin(this->cublasHandle, size_x, this->gpu_out_x, 1, 
+        &result));
 
     // float *data2 = (float *) malloc(size_x * sizeof(float));
     // CUDA_CALL(cudaMemcpy(data2, gpu_out_x, size_x * sizeof(float), 
@@ -335,19 +340,13 @@ if(GPU_MODE == 0) {
     // printf("Index: %d %d %d %f\n", result, (result % f + 1), (result / f), data2[result]);
     // free(data2);
 
-
     result -= 1;
-    CUDA_CALL(cudaMemcpy(&n->gain, gpu_out_x + result, sizeof(float), 
+    CUDA_CALL(cudaMemcpy(&n->gain, this->gpu_out_x + result, sizeof(float), 
         cudaMemcpyDeviceToHost));
     result += num_points;
     n->feature = (result / num_points);
     n->val = data[result];
 
-    CUDA_CALL(cudaFree(gpu_in_x));
-    CUDA_CALL(cudaFree(gpu_in_y));
-    CUDA_CALL(cudaFree(gpu_tmp));
-    CUDA_CALL(cudaFree(gpu_out_x));
-    CUBLAS_CALL(cublasDestroy(cublasHandle));
 }
     // printf("unc, n->gain %f %f\n", unc, n->gain);
     n->gain = unc - n->gain;
