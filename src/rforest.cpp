@@ -247,19 +247,19 @@ node *RandomForest::data_split(float *data, int num_points, bool v) {
     /* Get unc (uncertainty/impurity) in all the data (note that data[0] is 
     in y). */
     // TODO: do this in gpu mode
-    float unc = 0.;
+    float y_true = 0.;
     for (int r = 0; r < num_points; r++) {
-        unc += data[r];
+        y_true += data[r];
     }
 
     /* If there is no impurity, then we cannot gain info, so return. */
-    if ((unc < 1.) || (unc > num_points - 1)) { // TODO: point of potential failure
+    if ((y_true < 1.) || (y_true > num_points - 1)) { // TODO: point of potential failure
         n->feature = 0;
-        n->val = (unc > num_points - 1);
+        n->val = (y_true > num_points - 1);
         return n;
     }
     
-    unc = GINI(unc / num_points);
+    float unc = GINI(y_true / num_points);
 
 if(!this->gpu_mode) {
     /* Now, determine what split causes the smallest information loss. */
@@ -330,6 +330,11 @@ if(!this->gpu_mode) {
     // if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     // exit(0);
 
+    if (n->gain <= 0.000) {
+        n->feature = 0;
+        n->val = (y_true * 2 > num_points);
+    }
+    
     return n;
 }
 
@@ -349,12 +354,6 @@ node *RandomForest::node_split(float *data, int num_points) {
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
-        return n;
-    }
-    if (n->gain <= 0.000) {
-        // TODO: get a mean of y from inside data_split()
-        n->val = 0.;
-        n->feature = 0;
         return n;
     }
 
@@ -405,7 +404,6 @@ node *RandomForest::node_split(float *data, int num_points) {
 
 
 int main(int argc, char **argv) {
-    check_args(argc, argv);
     // int num_features = NUM_FEATURES, num_points = NUM_POINTS;
     
     /* Check number of arguments and parse them. */

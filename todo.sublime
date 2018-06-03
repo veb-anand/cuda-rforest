@@ -7,15 +7,15 @@ dont. use cublas for unc. sum(gpu_in_y)
 4. refactor io/helper functions out of rforest.cpp
 5. change class to do both cpu and gpu versions and time each
 6. read predictions from proper csv file
-
-7. does cublas have functions to aid split/partition?
-8. have the gpu only do on splits that are more than X points
-9. convert tree to forest (w/random sampling from data (based on benchmarks?))
-10. create depth limit to each tree (prevent over-training)
-12. have dataset name be taking by args
-13. rename "col/row" to "point/feature" where appropriate
-14. create free(tree) func
-5. benchmark properly (cuda). support more than 1000 points and benchmark
-gpu_mode as bool
-11. comment
 *. write predictions to csv file
+7. have dataset name be taking by args
+8. get val in gpu mode from mean
+
+9. rename "col/row" to "point/feature" where appropriate
+10. create free(tree) func
+11. convert tree to forest (w/random sampling from data (based on benchmarks?))
+12. create depth limit to each tree (prevent over-training)
+13. does cublas have functions to aid split/partition?
+14. benchmark properly (cuda). support more than 1000 points and benchmark
+15. have the gpu only do on splits that are more than X points
+16. comment
