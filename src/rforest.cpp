@@ -29,6 +29,7 @@
 #define NUM_FEATURES 5
 #define NUM_TREES 10 
 #define SUBSAMPLING_RATIO 0.3
+#define MAX_DEPTH NUM_POINTS
 
 using namespace std;
 
@@ -38,7 +39,7 @@ class RandomForest
 {
 public:
     RandomForest(float *data, int num_features, int num_points, int num_trees, 
-        int max_depth, bool gpu_mode);
+        int max_depth, float sub_sampling, bool gpu_mode);
     ~RandomForest();
     float *predict(float *x, int num_points);
     float predict_point(float *point, node *n);
@@ -73,7 +74,7 @@ protected:
 
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        int num_trees, int max_depth, bool gpu_mode) {
+        int num_trees, int max_depth, float sub_sampling, bool gpu_mode) {
     this->data = data;
     this->num_features = num_features; // includes y
     this->num_points = num_points;
@@ -81,7 +82,7 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     this->num_trees = num_trees; // TODO: take in from args.
     this->forest = NULL;
     this->max_depth = max_depth;
-    this->sub_sample_size = 50; // TODO: fix. if -1, do not subsample. take from args
+    this->sub_sample_size = (int) (sub_sampling * num_points); // TODO: fix. if -1, do not subsample. take from args
 
     CUBLAS_CALL(cublasCreate(&cublasHandle));
 
@@ -136,7 +137,7 @@ void RandomForest::build_forest() {
     this->forest = (node **) malloc(this->num_trees * sizeof(node *));
 
     float *sub;
-    if (this->sub_sample_size != -1) {
+    if (this->sub_sample_size > 0.) {
         sub = (float *) malloc(this->sub_sample_size * this->num_features * 
             sizeof(float));
         if (sub == NULL) malloc_err("build_forest");
@@ -144,7 +145,7 @@ void RandomForest::build_forest() {
 
     for (int t = 0; t < this->num_trees; t++) {
         // create subsample of data
-        if (this->sub_sample_size != -1) {
+        if (this->sub_sample_size > 0.) {
             for (int s = 0; s < this->sub_sample_size; s++) {
                 int p = rand() % num_points;
                 for (int f = 0; f < this->num_features; f++)
@@ -157,7 +158,7 @@ void RandomForest::build_forest() {
         }
     }
     
-    free(sub);
+    if (this->sub_sample_size > 0) free(sub);
 }
 
 void RandomForest::start_time() {
@@ -465,18 +466,20 @@ int main(int argc, char **argv) {
     /* Check number of arguments and parse them. */
     if (argc < 2) {
         printf("Incorrect number of arguments passed in (%d).\n"
-           "Usage: ./rforest <path of csv> [-s/--size <# points> <# features>] "
-           "[-t/--trees <# of trees>] [-d/--depth <max depth of trees>]\n", 
-           argc);
+           "Usage: ./rforest <path of csv> [-s/--shape <# points> <# features>] "
+           "[-t/--trees <# of trees>] [-d/--depth <max depth of trees>]" 
+            "[-f/-frac <fraction to use for subsmapling, if <=0, no sampling>]\n", 
+            argc);
         exit(0);
     }
     string path = argv[1];
     int num_points = NUM_POINTS;
     int num_features = NUM_FEATURES;
     int num_trees = NUM_TREES;
-    int max_depth = int(NUM_POINTS * SUBSAMPLING_RATIO);
+    float sub_sampling = SUBSAMPLING_RATIO;
+    int max_depth = MAX_DEPTH;
     for (int i = 2; i < argc; ++i) {
-        if (strcmp(argv[i], "--size") == 0 || strcmp(argv[i], "-s") == 0) {
+        if (strcmp(argv[i], "--shape") == 0 || strcmp(argv[i], "-s") == 0) {
             i++;
             if (i + 1 < argc) {
                 num_points = atoi(argv[i]);
@@ -489,8 +492,12 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--depth") == 0 || strcmp(argv[i], "-d") == 0) {
             i++;
             if (i < argc) max_depth = atoi(argv[i]);
+        } else if (strcmp(argv[i], "--frac") == 0 || strcmp(argv[i], "-f") == 0) {
+            i++;
+            if (i < argc) sub_sampling = atof(argv[i]);
         }
     }
+
 
     /* Read in data from path. */
     float *data = read_csv(path, num_features, num_points, false);
@@ -498,10 +505,12 @@ int main(int argc, char **argv) {
 
     /* Do benchmarking. */
     printf("\n************ CPU benchmarking: ************\n");
-    RandomForest(data, num_features, num_points, num_trees, max_depth, false);
+    RandomForest(data, num_features, num_points, num_trees, max_depth, 
+        sub_sampling, false);
     
     printf("\n\n************ GPU/CUDA benchmarking: ************\n");
-    // RandomForest(data, num_features, num_points, num_trees, max_depth, true);
+    // RandomForest(data, num_features, num_points, num_trees, max_depth, 
+    //   sub_sampling, true);
 
     return 0;
 }

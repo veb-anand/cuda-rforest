@@ -106,8 +106,8 @@ float *read_csv(string path, int num_features, int num_points, bool verbose) {
 
     f.close();
 
-    printf("\nSuccesfully read in data(features:%d, rows:%d):\n", 
-        num_features, num_points);
+    printf("\nSuccesfully read in data(points:%d, features:%d)\n", 
+        num_points, num_features);
 
     if (verbose) {
         print_matrix(data, num_features, num_points);

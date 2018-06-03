@@ -12,7 +12,7 @@
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
 #define IDX2C(i,j,ld) (((j)*(ld))+(i))
-#define SMALL 0.00001
+#define SMALL 1e-7
 
 using namespace std;
 
