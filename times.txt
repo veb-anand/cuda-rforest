@@ -10,7 +10,7 @@ CPU
         Partition ~ 474
 1000x10
     Python
-        Tree ~ 14,100,000
+        Tree ~ 14,100,000 (TODO: recheck this)
     CPU
         Tree ~ 265,246
 1000x10

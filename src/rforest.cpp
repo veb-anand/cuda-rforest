@@ -153,19 +153,43 @@ void print_tree(node *n) {
     cout << ")";
 }
 
-float predict_point(float point, node *n) {
-    // TODO: convert this into an int
-    // if (n->feature == 0) {
-        
-    // }
+float predict_point(float *point, node *n) {
+    // TODO: convert this into (!n->feature)
+    if (n->feature == 0) {
+        return n->val;
+    }
+    if (point[n->feature - 1] >= n->val) {
+        return predict_point(point, n->true_branch);
+    } else {
+        return predict_point(point, n->false_branch);
+    }
 }
 
-float *predict(float *x, int num_features, int num_points, node *n) {
+// Takes data without y vector in point-major order (feature-major everywhere else)
+// also num_features is number of columns in x.
+float *predict(float *x, int num_points, int num_features, node *n) {
     float *y = (float *) malloc(num_points * sizeof(float));
     for (int p = 0; p < num_points; p++) {
-        y[p] = predict_point(x[p], n);
+        y[p] = predict_point(x + p * num_features, n);
     }
     return y;
+}
+
+
+// Returns transpose of matrix (not in-place). Uses gpu if GPU_MODE
+float *transpose(float *data, int num_rows, int num_cols) {
+    float *t = (float *) malloc(num_rows * num_cols * sizeof(float));
+
+// if (GPU_MODE) {
+    // use cublasSgeam() w/alpha=1 and beta=0    
+// }
+    for (int i = 0; i < num_rows; i++) {
+        for (int j = 0; j < num_cols; j++) {
+            t[j * num_rows + i] = data[i * num_cols + j];
+        }
+    }
+
+    return t;
 }
 
 
@@ -262,19 +286,17 @@ if(GPU_MODE == 0) {
 
 node *node_split(float *data, int num_features, int num_points) {
     /* Find the optimal split in the data. */
-    // TODO: pass a gpu argument based on num_points & num_features
+    // TODO: in function, use gpu based on num_points & num_features
     node *n = data_split(data, num_features, num_points);
     // printf("Split: %d %f %f\n", n->feature, n->val, n->gain);
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
-        free(data);
         return n;
     }
     if (n->gain <= 0.001) {
         // TODO: get a mean of y from inside data_split()
         n->val = 0.;
-        free(data);
         return n;
     }
     // exit(0);
@@ -315,9 +337,9 @@ node *node_split(float *data, int num_features, int num_points) {
     // }
 
     n->false_branch = node_split(f_data, num_features, f_rows);
+    free(f_data);
     n->true_branch = node_split(t_data, num_features, t_rows);
-
-    free(data);
+    free(t_data);
 
     return n;
 }
@@ -327,9 +349,13 @@ int main(int argc, char **argv) {
     // vector<int> v = new vector<int>;
 
     // create_random_data(3, 5);
-    int num_points = 1000, num_features = 10;
+    int num_points = 20, num_features = 10;
 
     float *data = read_csv("data/data.csv", num_features, num_points);
+    // print_matrix(data, num_features, num_points);
+    // float *t = transpose(data, num_features, num_points);
+    // print_matrix(t, num_points, num_features);
+    // return 0;
 
     cout << "version:\n";
 
@@ -338,6 +364,12 @@ int main(int argc, char **argv) {
     printf("\n\tTicks: %d\n", (uint)(clock() - time_a));
 
     print_tree(tree); cout << endl << endl;
+
+    printf("Predicting\n");
+    print_vector(data, num_points);
+    float *test_x = transpose(data + num_points, num_features - 1, num_points);
+    float *pred = predict(test_x, num_points, num_features - 1, tree);
+    print_vector(pred, num_points);
 
     // cout << "\nFinished split:\nTrue data:\n";
     // print_matrix(t_data, num_features, t_rows);
