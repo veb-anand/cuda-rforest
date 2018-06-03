@@ -5,9 +5,10 @@ TODO:
 2. refactor into a class, put cublasHandle in class initialization
     done
 3. write prediction and error functions. make gpu versions
-    done first part.
+    done
+dont. use cublas for unc. sum(gpu_in_y)
 4. benchmark properly (cuda). support more than 1000 points and benchmark
-5. use cublas for unc. sum(gpu_in_y)
+
 6. change class to do both cpu and gpu versions and time each
 7. does cublas have functions to aid split/partition?
 8. have the gpu only do on splits that are more than X points
@@ -15,3 +16,5 @@ TODO:
 10. create depth limit to each tree (prevent over-training)
 11. comment
 12. have dataset name be taking by args
+13. rename "col/row" to "point/feature" where appropriate
+14. create free(tree) func

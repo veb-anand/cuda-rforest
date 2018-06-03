@@ -30,6 +30,8 @@
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
 #define GPU_MODE 1
+#define NUM_POINTS 1000
+#define NUM_FEATURES 50
 
 using namespace std;
 
@@ -133,9 +135,11 @@ public:
     // these functions are relatively generic but are included because they contain personalized cuda versions
     float get_mse_loss(float *y, float *preds, int num_points);
     float *transpose(float *data, int num_rows, int num_cols);
+    void start_time();
+    float end_time();
 
 protected:
-    float get_info_loss(float *y, float *col, float val);
+    float get_info_loss(float *y, float *col, float val, int num_points);
     node *data_split(float *data, int num_points);
     node *node_split(float *data, int num_points);
 
@@ -146,6 +150,7 @@ protected:
 
     cublasHandle_t cublasHandle;
     float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
+    cudaEvent_t start, stop;
 };
 
 
@@ -172,18 +177,22 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
 
     cout << "GPU mode: " << gpu_mode << endl;
 
-    clock_t time_a = clock();
+    // clock_t time_a = clock();
+    this->start_time();
     node *tree = this->node_split(data, num_points);
-    printf("\n\tTicks: %d\n", (uint)(clock() - time_a));
 
     print_tree(tree); cout << endl << endl;
+    printf("\nTree time: %f\n", this->end_time()); // (uint)(clock() - time_a)
 
-    printf("Predicting\n");
-    print_vector(data, num_points);
+    this->start_time();
     float *test_x = this->transpose(data + num_points, num_features - 1, num_points);
+    printf("\nTranspose time: %f\n", this->end_time()); // (uint)(clock() - time_a)
+    // print_vector(data, num_points);
     float *preds = this->predict(test_x, num_points, tree);
-    print_vector(preds, num_points);
-    printf("Training loss: %f\n", this->get_mse_loss(data, preds, num_points));
+    // print_vector(preds, num_points);
+    this->start_time();
+    printf("\n\tTraining loss: %f\n", this->get_mse_loss(data, preds, num_points));
+    printf("\nLoss time: %f\n", this->end_time()); // (uint)(clock() - time_a)
 
     cout << "Finished!" << endl;
 
@@ -201,15 +210,33 @@ RandomForest::~RandomForest() {
 }
 
 
+
+void RandomForest::start_time() {
+    CUDA_CALL(cudaEventCreate(&this->start));
+    CUDA_CALL(cudaEventCreate(&this->stop));
+    CUDA_CALL(cudaEventRecord(this->start));
+}
+
+float RandomForest::end_time() {
+    float time = -1.;
+    CUDA_CALL(cudaEventRecord(this->stop));
+    CUDA_CALL(cudaEventSynchronize(this->stop));
+    CUDA_CALL(cudaEventElapsedTime(&time, this->start, this->stop));
+    CUDA_CALL(cudaEventDestroy(this->start));
+    CUDA_CALL(cudaEventDestroy(this->stop));
+    return time;
+}
+
+
 /* Get the information lost (impurity in y) by splitting data across col by 
 val. y and col are of length num_points. This is cpu-only. */
-float RandomForest::get_info_loss(float *y, float *col, float val) {
+float RandomForest::get_info_loss(float *y, float *col, float val, int num_points) {
     float part1_y = 0.;  // sum of y where col >= val (partition 1)
     float part1_n = SMALL;  // number of rows where col >= val
     float part2_y = 0.;  //sum of y where col < val (partition 2)
     float part2_n = SMALL;  // number of rows where col < val
 
-    for (int r = 0; r < this->num_points; r++) {
+    for (int r = 0; r < num_points; r++) {
         if (col[r] >= val) {
             part1_y += y[r];
             part1_n += 1.;
@@ -222,7 +249,7 @@ float RandomForest::get_info_loss(float *y, float *col, float val) {
     part2_y /= part2_n; // fraction of y=1 where col < val
 
     /* Get proportion of points that are in partition 1 vs 2. */
-    float part1_p = (part1_n / this->num_points);
+    float part1_p = (part1_n / num_points);
 
     /* Return total impurity by spliting into partitions 1 and 2. */
     return (GINI(part1_y) * part1_p + GINI(part2_y) * (1 - part1_p));
@@ -286,10 +313,10 @@ float *RandomForest::transpose(float *data, int num_rows, int num_cols) {
     int size = num_rows * num_cols;
 
 if ((this->gpu_mode) && ((this->num_features - 1) * this->num_points >= size)) {
-    // use cublasSgeam() w/alpha=1 and beta=0
     float one = 1., zero = 0.;
     CUDA_CALL(cudaMemcpy(this->gpu_tmp, data, size * sizeof(float), 
         cudaMemcpyHostToDevice));
+    // use cublasSgeam() w/alpha=1 and beta=0
     CUBLAS_CALL(cublasSgeam(this->cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, num_rows, num_cols, &one, this->gpu_tmp, num_cols, &zero, this->gpu_tmp, num_rows, this->gpu_out_x, num_rows));
     CUDA_CALL(cudaMemcpy(t, this->gpu_out_x, size * sizeof(float), 
         cudaMemcpyDeviceToHost));
@@ -337,14 +364,22 @@ if(this->gpu_mode == 0) {
 
     for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
         for (int r = 0; r < num_points; r++) {
-            info_loss = this->get_info_loss(data, data + i, data[i + r]);
+            info_loss = this->get_info_loss(data, data + i, data[i + r], num_points);
             if (info_loss < n->gain) {
+                // printf("i%d, loss%f val%f\n", i, info_loss, data[i+r]);
                 n->gain = info_loss;
                 n->feature = i / num_points;
                 n->val = data[i + r];
             }
         }
     }
+    // if (n->gain < 0.) {
+    //     printf("unc %f, n->gain %f\n", unc, n->gain);
+    //     this->get_info_loss(data, data + (n->feature * num_points), n->val, 1);
+    //     print_vector(data, num_points);
+    //     exit(0);
+    // }
+
 } else {
     int f = this->num_features - 1;
     int size_x = f * num_points;
@@ -389,57 +424,54 @@ node *RandomForest::node_split(float *data, int num_points) {
     /* Find the optimal split in the data. */
     // TODO: in function, use gpu based on num_points & num_features
     node *n = this->data_split(data, num_points);
-    // printf("Split: %d %f %f\n", n->feature, n->val, n->gain);
+    // printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
         return n;
     }
-    if (n->gain <= 0.001) {
+    if (n->gain <= 0.000) {
         // TODO: get a mean of y from inside data_split()
         n->val = 0.;
+        n->feature = 0;
         return n;
     }
-    // exit(0);
-
 
     /* Partition data according to the split. */
-    int r, f, t_rows = 0, f_rows, tr = 0, fr = 0;
+    int t_points = 0, f_points, tr = 0, fr = 0;
     float *col = data + (num_points * n->feature);
 
     /* Compute number of rows in each partition. */
-    for (r = 0; r < num_points; r++) t_rows += (col[r] >= n->val);
-    f_rows = num_points - t_rows;
+    for (int r = 0; r < num_points; r++) t_points += (col[r] >= n->val);
+    f_points = num_points - t_points;
 
-    float *t_data = (float *) malloc(t_rows * this->num_features * sizeof(float));
-    float *f_data = (float *) malloc(f_rows * this->num_features * sizeof(float));
+    float *t_data = (float *) malloc(t_points * this->num_features * sizeof(float));
+    float *f_data = (float *) malloc(f_points * this->num_features * sizeof(float));
 
     /* Poor indexing, but faster than transposing back and forth. */
-    for (r = 0; r < num_points; r++) {
+    for (int r = 0; r < num_points; r++) {
         if (col[r] >= n->val) {
-            for (f = 0; f < this->num_features; f++) {
-                t_data[(t_rows * f) + tr] = data[(num_points * f) + r];
+            for (int f = 0; f < this->num_features; f++) {
+                t_data[(t_points * f) + tr] = data[(num_points * f) + r];
             }
             tr++;
         } else {
-            for (f = 0; f < this->num_features; f++) {
-                f_data[(f_rows * f) + fr] = data[(num_points * f) + r];
+            for (int f = 0; f < this->num_features; f++) {
+                f_data[(f_points * f) + fr] = data[(num_points * f) + r];
             }
             fr++;
         }
     }
-
-    // printf("Trows:%d, Frows: %d\n", t_rows, f_rows);
-    // if (n->gain == .5) {
-    //     printf("num: %d %d\n", num_features, num_points);
-    //     print_matrix(data, num_features, num_points);
-    //     print_matrix(t_data, num_features, t_rows);
-    //     exit(0);
+    // if ((f_points == 0) || (t_points == 0)) {
+    //     printf("Num rows: %d, %d, %d, %d\n", num_points, t_points, f_points, n->feature);
+    //     // print_matrix(f_data, this->num_features, f_points);
+    //     n->feature = 0;
+    //     return n;
     // }
 
-    n->false_branch = this->node_split(f_data, f_rows);
+    n->false_branch = this->node_split(f_data, f_points);
     free(f_data);
-    n->true_branch = this->node_split(t_data, t_rows);
+    n->true_branch = this->node_split(t_data, t_points);
     free(t_data);
 
     return n;
@@ -448,11 +480,8 @@ node *RandomForest::node_split(float *data, int num_points) {
 
 
 int main(int argc, char **argv) {
-    // vector<int> *v = new vector<int>;
-    // vector<int> v = new vector<int>;
-
     // create_random_data(3, 5);
-    int num_features = 5, num_points = 10;
+    int num_features = NUM_FEATURES, num_points = NUM_POINTS;
     float *data = read_csv("data/data.csv", num_features, num_points);
     RandomForest(data, num_features, num_points, GPU_MODE);
 
