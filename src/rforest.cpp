@@ -24,7 +24,7 @@
     0: use cpu for every operation
     1: use gpu for data_split (CUBLAS only), no parallelization between trees
 */
-#define GPU_MODE 1
+#define GPU_MODE true
 #define NUM_POINTS 1000
 #define NUM_FEATURES 50
 
@@ -35,7 +35,7 @@ using namespace std;
 class RandomForest
 {
 public:
-    RandomForest(float *data, int num_features, int num_points, int gpu_mode);
+    RandomForest(float *data, int num_features, int num_points, bool gpu_mode);
     ~RandomForest();
     float *predict(float *x, int num_points, node *n);
     float predict_point(float *point, node *n);
@@ -48,13 +48,13 @@ public:
 
 protected:
     float get_info_loss(float *y, float *col, float val, int num_points);
-    node *data_split(float *data, int num_points);
+    node *data_split(float *data, int num_points, bool v);
     node *node_split(float *data, int num_points);
 
     float *data;
     int num_features;
     int num_points;
-    int gpu_mode;
+    bool gpu_mode;
 
     cublasHandle_t cublasHandle;
     float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
@@ -63,7 +63,7 @@ protected:
 
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        int gpu_mode) {
+        bool gpu_mode) {
     this->data = data;
     this->num_features = num_features; // includes y
     this->num_points = num_points;
@@ -83,7 +83,8 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
     // print_matrix(t, num_points, num_features - 1);
     // return;
 
-    cout << "GPU mode: " << gpu_mode << endl;
+    if (gpu_mode) printf("GPU/CUDA benchmarking:\n");
+    else          printf("CPU benchmarking:\n");
 
     // clock_t time_a = clock();
     this->start_time();
@@ -245,7 +246,7 @@ else {
 
 /* Find optimal split in the data (by attribute and by val) that minimizes 
 impurity. */
-node *RandomForest::data_split(float *data, int num_points) {
+node *RandomForest::data_split(float *data, int num_points, bool v) {
     node *n = new node;
 
     /* Get unc (uncertainty/impurity) in all the data (note that data[0] is 
@@ -265,7 +266,7 @@ node *RandomForest::data_split(float *data, int num_points) {
     
     unc = GINI(unc / num_points);
 
-if(this->gpu_mode == 0) {
+if(!this->gpu_mode) {
     /* Now, determine what split causes the smallest information loss. */
     n->gain = unc;
     float info_loss;
@@ -293,25 +294,34 @@ if(this->gpu_mode == 0) {
     int size_x = f * num_points;
 
     /* Copy data into inputs. */
-    CUDA_CALL(cudaMemcpy(gpu_in_x, data + num_points, size_x * sizeof(float), 
+    CUDA_CALL(cudaMemcpy(this->gpu_in_x, data + num_points, size_x * sizeof(float), 
         cudaMemcpyHostToDevice));
-    CUDA_CALL(cudaMemcpy(gpu_in_y, data, num_points * sizeof(float), 
+    CUDA_CALL(cudaMemcpy(this->gpu_in_y, data, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
 
     /* Compute information gains. */
     cuda_call_get_losses(this->gpu_in_x, this->gpu_in_y, this->gpu_tmp, 
         this->gpu_out_x, f, num_points);
     int result;
+
+    if (v) {
+        float *data2 = (float *) malloc(size_x * sizeof(float));
+        CUDA_CALL(cudaMemcpy(data2, this->gpu_out_x, size_x * sizeof(float), 
+            cudaMemcpyDeviceToHost));
+        // print_matrix(data, f, 5);
+        // print_matrix(data2, f, 5);
+        // printf("Index: %d %d %d %f %d\n", result, (result % f + 1), (result / f), data2[result], num_points);
+        for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
+            for (int r = 0; r < 5; r++) {
+                int info_loss = this->get_info_loss(data, data + i, data[i + r], num_points);
+                printf("cpu: %f, gpu:%f\n", info_loss, data2[i + r - num_points]);
+            }
+        }
+        free(data2);
+    }
+
     CUBLAS_CALL(cublasIsamin(this->cublasHandle, size_x, this->gpu_out_x, 1, 
         &result));
-
-    // float *data2 = (float *) malloc(size_x * sizeof(float));
-    // CUDA_CALL(cudaMemcpy(data2, gpu_out_x, size_x * sizeof(float), 
-    //     cudaMemcpyDeviceToHost));
-    // print_matrix(data2, f, num_points);
-    // printf("Index: %d %d %d %f\n", result, (result % f + 1), (result / f), data2[result]);
-    // free(data2);
-
     result -= 1;
     CUDA_CALL(cudaMemcpy(&n->gain, this->gpu_out_x + result, sizeof(float), 
         cudaMemcpyDeviceToHost));
@@ -320,8 +330,9 @@ if(this->gpu_mode == 0) {
     n->val = data[result];
 
 }
-    // printf("unc, n->gain %f %f\n", unc, n->gain);
+    if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     n->gain = unc - n->gain;
+    if (v) printf("unc, n->gain %f %f\n", unc, n->gain);
     // exit(0);
 
     return n;
@@ -331,8 +342,15 @@ if(this->gpu_mode == 0) {
 node *RandomForest::node_split(float *data, int num_points) {
     /* Find the optimal split in the data. */
     // TODO: in function, use gpu based on num_points & num_features
-    node *n = this->data_split(data, num_points);
+    // node *n = this->data_split(data, num_points, false);
     // printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
+
+    // this->gpu_mode = false;
+    // node *n = this->data_split(data, num_points, false);
+    // printf("C-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
+    // this->gpu_mode = true;
+    n = this->data_split(data, num_points, false);
+    // printf("G-Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
@@ -372,9 +390,12 @@ node *RandomForest::node_split(float *data, int num_points) {
     }
     // if ((f_points == 0) || (t_points == 0)) {
     //     printf("Num rows: %d, %d, %d, %d\n", num_points, t_points, f_points, n->feature);
+    //     n = this->data_split(data, num_points, true);
+    //     printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
+    //     exit(0);
     //     // print_matrix(f_data, this->num_features, f_points);
     //     n->feature = 0;
-    //     return n;
+    //     // return n;
     // }
 
     n->false_branch = this->node_split(f_data, f_points);
