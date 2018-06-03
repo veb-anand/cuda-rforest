@@ -9,5 +9,6 @@ TODO:
 6. change class to do both cpu and gpu versions and time each
 7. does cublas have functions to aid split/partition?
 8. have the gpu only do on splits that are more than X points
-9. convert tree to forest
-10. comment
+9. convert tree to forest (w/random sampling from data (based on benchmarks?))
+10. create depth limit to each tree (prevent over-training)
+11. comment

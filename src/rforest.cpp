@@ -175,6 +175,17 @@ float *predict(float *x, int num_points, int num_features, node *n) {
     return y;
 }
 
+// calculates and returns mean-squared error loss
+float get_mse_loss(float *y, float *preds, int num_points) {
+    // TODO create a CUDA version
+    float loss = 0;
+    for (int i = 0; i < num_points; i++) {
+        loss += (y[i] - preds[i]) * (y[i] - preds[i]);
+    }
+    loss /= num_points;
+    return loss;
+}
+
 
 // Returns transpose of matrix (not in-place). Uses gpu if GPU_MODE
 float *transpose(float *data, int num_rows, int num_cols) {
@@ -370,6 +381,7 @@ int main(int argc, char **argv) {
     float *test_x = transpose(data + num_points, num_features - 1, num_points);
     float *pred = predict(test_x, num_points, num_features - 1, tree);
     print_vector(pred, num_points);
+    printf("Training loss: %f\n", get_mse_loss(data, pred, num_points));
 
     // cout << "\nFinished split:\nTrue data:\n";
     // print_matrix(t_data, num_features, t_rows);
