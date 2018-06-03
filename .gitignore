@@ -1,0 +1,10 @@
+# files being edited
+*~
+
+# make and build files
+*.o
+rforest
+
+# other files
+data/*
+

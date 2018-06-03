@@ -1,0 +1,30 @@
+Times are in microseconds
+
+CPU
+5000x10
+    Python
+        Get split ~ 126,000,000
+        Partition
+    CPU
+        Get split ~ 2,489,484
+        Partition ~ 474
+1000x10
+    Python
+        Tree ~ 14,100,000
+    CPU
+        Tree ~ 265,246
+1000x10
+    Python
+        Tree ~ 9,800,000
+    CPU
+        Tree ~ 182,676
+    GPU1
+        Tree ~ 405,961
+1000x50
+    CPU
+        Tree ~ 725,300
+    GPU1
+        Tree ~ 444,857
+
+
+
