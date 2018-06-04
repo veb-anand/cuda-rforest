@@ -21,9 +21,9 @@
 
     unsigned tid = threadIdx.x;
     float part1_n, part1_y, part2_n, part2_y;
-    // uint threads_per_block = blockDim.x;
 
-    // if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
+    if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
+
 
     for (uint p = 0; p < num_points; p++) {
         uint i = (blockIdx.x * num_points) + tid; // match to every element in gpu_in_x

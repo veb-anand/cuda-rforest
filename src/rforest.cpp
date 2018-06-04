@@ -21,7 +21,7 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 100
+#define NUM_POINTS 200
 #define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
@@ -223,6 +223,7 @@ float *RandomForest::predict(float *x, int num_points) {
     if (y == NULL)  malloc_err("predict");
 
     for (int p = 0; p < num_points; p++) {
+        y[p] = 0.;
         for (int t = 0; t < num_trees; t++) {
             y[p] += predict_point(x + p * (this->num_features - 1), 
                 this->forest[t]);
@@ -371,11 +372,8 @@ if(!this->gpu_mode) {
 node *RandomForest::node_split(float *data, int num_points, int depth) {
     /* Find the optimal split in the data. */
     // TODO: in function, use gpu based on num_points & num_features
-    // node *n = this->data_split(data, num_points, false);
-    // printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     node *n = this->data_split(data, num_points, (depth >= this->max_depth), false);
-    // printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
@@ -408,13 +406,7 @@ node *RandomForest::node_split(float *data, int num_points, int depth) {
             fp++;
         }
     }
-    if ((f_points == 0) || (t_points == 0)) {
-        printf("Num rows: %d, %d, %d, %d\n", num_points, t_points, f_points, n->feature);
-        n = this->data_split(data, num_points, false, true);
-        printf("Split: %d %f %f, %d\n", n->feature, n->val, n->gain, num_points);
-        exit(0);
-    }
-
+    
     n->false_branch = this->node_split(f_data, f_points, depth + 1);
     free(f_data);
     n->true_branch = this->node_split(t_data, t_points, depth + 1);
