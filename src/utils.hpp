@@ -8,11 +8,10 @@
 
 #pragma once
 
-#define GINI(x) (1 - x * x - (1 - x) * (1 - x))
+#define GINI(x) (1. - x * x - (1. - x) * (1. - x))
 #define MIN(a, b) (a > b ? b : a)
 #define MAX(a, b) (a > b ? a : b)
-#define IDX2C(i,j,ld) (((j)*(ld))+(i))
-#define SMALL 1e-7
+#define SMALL 1e-7 // used to prevent against divide by 0 errors
 
 using namespace std;
 

@@ -15,8 +15,9 @@ dont. use cublas for unc. sum(gpu_in_y)
 11. convert tree to forest (w/random sampling from data (based on benchmarks?))
 12. create depth limit to each tree (prevent over-training)
 
-13. does cublas have functions to aid split/partition?
 14. benchmark properly (cuda). support more than 1000 points and benchmark
-?. randomly generate data using curandGenerateUniform()
 15. have the gpu only do on splits that are more than X points
 16. comment
+
+?. does cublas have functions to aid split/partition?
+?. randomly generate data using curandGenerateUniform()

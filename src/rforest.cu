@@ -23,7 +23,7 @@
     float part1_n, part1_y, part2_n, part2_y;
     // uint threads_per_block = blockDim.x;
 
-    if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
+    // if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
 
     for (uint p = 0; p < num_points; p++) {
         uint i = (blockIdx.x * num_points) + tid; // match to every element in gpu_in_x
@@ -38,18 +38,21 @@
             shmem[4 * tid] = gpu_tmp[i];
             shmem[4 * tid + 1] = shmem[4 * tid] * gpu_in_y[tid];
             shmem[4 * tid + 2] = (1 - shmem[4 * tid]) * gpu_in_y[tid];
+            shmem[4 * tid + 3] = 0.;
             // atomicAdd(&shmem[0], gpu_tmp[k]);
         }
+
         __syncthreads();
-        
-        // TODO: num_points better be even!
-        for (uint s = blockDim.x / 2; s > 2; s >>= 1) {
+        shmem[tid] += shmem[tid + blockDim.x * 3];
+
+        for (uint s = blockDim.x * 2; s > 2; s >>= 1) {
+            __syncthreads();
             if (tid < s) {
                 shmem[tid] += shmem[tid + s];
             }
-            __syncthreads();
         }
 
+        __syncthreads();
         if (tid == 0) {
             part1_n = shmem[0];
             part2_n = num_points - part1_n;
