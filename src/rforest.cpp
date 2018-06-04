@@ -21,7 +21,7 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 1024
+#define NUM_POINTS 2000
 #define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
@@ -45,7 +45,7 @@ public:
     void start_time();
     float end_time();
 
-protected:
+private:
     float get_info_loss(float *y, float *col, float val, int num_points);
     node *data_split(float *data, int num_points, bool no_split, bool v);
     node *node_split(float *data, int num_points, int depth);
@@ -54,6 +54,7 @@ protected:
 
     float *data;
     int num_features;
+
     int num_points;
     bool gpu_mode;
 

@@ -23,23 +23,30 @@
     float part1_n, part1_y, part2_n, part2_y;
 
     for (uint p = 0; p < num_points; p++) {
-        uint i = (blockIdx.x * num_points) + tid; // match to every element in gpu_in_x
+        uint ip = tid;
+        uint i = (blockIdx.x * num_points); // match to every element in gpu_in_x
 
         // BLOCKSPECIFIC:
         uint j = (blockIdx.x * num_points) + p; // match to first point in every feature of gpu_in
 
         // ITERATE by THREADS_PER_BLOCK until we are done with num_points!
 
-        if (tid < num_points) {
-            gpu_tmp[i] = (gpu_in_x[i] >= gpu_in_x[j]);
-            shmem[4 * tid] = gpu_tmp[i];
+        // this is not in the while loop as standard to b/c we want to set, not add in the first iteration. save some time by not setting to zero outside.
+        if (ip < num_points) {
+            shmem[4 * tid] = (gpu_in_x[i + ip] >= gpu_in_x[j]);
             shmem[4 * tid + 1] = shmem[4 * tid] * gpu_in_y[tid];
             shmem[4 * tid + 2] = (1 - shmem[4 * tid]) * gpu_in_y[tid];
-            shmem[4 * tid + 3] = 0.;
-            // atomicAdd(&shmem[0], gpu_tmp[k]);
+            ip += THREADS_PER_BLOCK;
         }
-
         __syncthreads();
+        while (ip < num_points) {
+            shmem[4 * tid] += (gpu_in_x[i + ip] >= gpu_in_x[j]);
+            shmem[4 * tid + 1] += shmem[4 * tid] * gpu_in_y[tid];
+            shmem[4 * tid + 2] += (1 - shmem[4 * tid]) * gpu_in_y[tid];
+            ip += THREADS_PER_BLOCK;
+        }
+        __syncthreads();
+
         shmem[tid] += shmem[tid + blockDim.x * 3];
 
         for (uint s = blockDim.x * 2; s > 2; s >>= 1) {
