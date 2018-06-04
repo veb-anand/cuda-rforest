@@ -21,11 +21,12 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 250
-#define NUM_FEATURES 2
+#define NUM_POINTS 20000
+#define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
 #define MAX_DEPTH NUM_POINTS
+#define VERBOSITY 0
 
 // gpu point barriers: number of points needed at different stages to switch from using cpu to gpu (note: based on benchmarking on a single PC). see their usage for context
 #define GPU_BARRIER_1 750
@@ -38,7 +39,7 @@ class RandomForest
 {
 public:
     RandomForest(float *data, int num_features, int num_points, int num_trees, 
-        int max_depth, float sub_sampling, bool gpu_mode);
+        int max_depth, float sub_sampling, bool gpu_mode, int verbose);
     ~RandomForest();
     float *predict(float *x, int num_points);
     float predict_point(float *point, node *n);
@@ -74,7 +75,8 @@ private:
 
 
 RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        int num_trees, int max_depth, float sub_sampling, bool gpu_mode) {
+        int num_trees, int max_depth, float sub_sampling, bool gpu_mode, 
+        int verbose) {
     this->data = data;
     this->num_features = num_features; // includes y
     this->num_points = num_points;
@@ -97,12 +99,15 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
 
     this->start_time();
     this->build_forest();
-    printf("\nForest (%d) time: %f\n", num_trees, this->end_time());
+    float end = this->end_time();
 
-    for (int t = 0; t < MIN(num_trees, 3); t++) {
+if (verbose) {
+    for (int t = 0; t < MIN(num_trees, verbose); t++) {
         print_tree(this->forest[t]); cout << endl << endl;
     }
-    // print_tree(this->forest[1]); cout << endl << endl;
+}
+    
+    printf("\nForest (%d) time: %f\n", num_trees, end);
 
     this->start_time();
     float *test_x = this->transpose(data + num_points, num_features - 1, num_points);
@@ -431,8 +436,8 @@ int main(int argc, char **argv) {
         printf("Incorrect number of arguments passed in (%d).\n"
         "Usage: ./rforest <path of csv>\n\t[-s/--shape <# points> <# features>]"
         "\n\t[-t/--trees <# of trees>]\n\t[-d/--depth <max depth of trees>]" 
-        "\n\t[-f/-frac <fraction to use for subsmapling, if <=0, no sampling>]\n", 
-        argc);
+        "\n\t[-f/--frac <fraction to use for subsmapling, if <=0, no sampling>]"
+        "\n\t[-v/--verbose <level of verbosity, default 1>\n", argc);
         exit(0);
     }
     string path = argv[1];
@@ -441,6 +446,8 @@ int main(int argc, char **argv) {
     int num_trees = NUM_TREES;
     float sub_sampling = SUBSAMPLING_RATIO;
     int max_depth = MAX_DEPTH;
+    int verbose = VERBOSITY;
+
     for (int i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--shape") == 0 || strcmp(argv[i], "-s") == 0) {
             i++;
@@ -458,6 +465,9 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--frac") == 0 || strcmp(argv[i], "-f") == 0) {
             i++;
             if (i < argc) sub_sampling = atof(argv[i]);
+        } else if (strcmp(argv[i], "--verbosity") == 0 || strcmp(argv[i], "-v") == 0) {
+            i++;
+            if (i < argc) verbose = atoi(argv[i]);
         }
     }
 
@@ -469,11 +479,11 @@ int main(int argc, char **argv) {
     /* Do benchmarking. */
     printf("\n************ CPU benchmarking: ************\n");
     RandomForest(data, num_features, num_points, num_trees, max_depth, 
-        sub_sampling, false);
+        sub_sampling, false, verbose);
     
     printf("\n\n************ GPU/CUDA benchmarking: ************\n");
     RandomForest(data, num_features, num_points, num_trees, max_depth, 
-      sub_sampling, true);
+      sub_sampling, true, verbose);
 
     free(data);
 

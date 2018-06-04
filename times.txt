@@ -1,31 +1,14 @@
-Times are in microseconds (Old):
-5000x10
-    Python
-        Get split ~ 126,000,000
-        Partition
-    CPU
-        Get split ~ 2,489,484
-        Partition ~ 474
-1000x10
-    Python
-        Tree ~ 14,100,000 (TODO: recheck this)
-    CPU
-        Tree ~ 265,246
-1000x10
-    Python
-        Tree ~ 9,800,000
-    CPU
-        Tree ~ 182,676
-    GPU1
-        Tree ~ 405,961
-1000x50
-    CPU
-        Tree ~ 725,300
-    GPU1
-        Tree ~ 444,857
-
-
 Times are in ms:
+
+No subsampling or capped depth. 0 loss on training.
+PointsxFeatures
+1000x10
+    Python
+        Tree ~ 9,800
+    CPU
+        Tree ~ 265
+    GPU
+        Tree ~ 49
 2000x5
     CPU
         Tree ~ 85, Transpose ~ 0.02, Loss ~ 0.04
@@ -36,3 +19,28 @@ Times are in ms:
         Tree ~ 5.5
     GPU
         Tree ~ 1.7
+10000x10
+    CPU
+        Tree ~ 20,172
+    GPU
+        Tree ~ 895
+5000x10
+    Python
+        Tree ~ 229,000
+    CPU
+        Tree ~ 4,597, Transpose ~ 0.14, Loss ~ 0.02
+        Forest(10) ~ 37,550
+    GPU
+        Tree ~ 800, Transpose ~ 0.10, Loss ~ 0.09
+        Forest(10) ~ 6,774
+20000x5
+    CPU
+        Tree ~ 140,042, Transpose ~ 0.25, Loss ~ 0.05
+    GPU
+        Tree ~ 3,558, Transpose ~ 0.17, Loss ~ 0.11
+    Both
+        Predict ~ 9,000
+
+Loss after subsampling different amounts and using different depths.
+Mode, Shape, Number of trees, Subsampling ratio, Max depth
+
