@@ -1,6 +1,6 @@
 Times are in ms:
 
-No subsampling or capped depth. 0 loss on training.
+No subsampling/bagging or capped depth. (0 loss on training).
 PointsxFeatures
 1000x10
     Python
@@ -40,6 +40,7 @@ PointsxFeatures
         Tree ~ 3,558, Transpose ~ 0.17, Loss ~ 0.11
     Both
         Predict ~ 9,000
+
 
 Loss after subsampling different amounts and using different depths.
 Mode, Shape, Number of trees, Subsampling ratio, Max depth

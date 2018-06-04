@@ -3,11 +3,8 @@
  * Vaibhav Anand, 2018
  */
 
-#include <cstdio>
 #include <fstream>
 #include <iostream>
-// #include <cstdlib>
-#include <cstring>
 #include <string.h>
 
 #include "utils.hpp"

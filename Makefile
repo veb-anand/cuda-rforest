@@ -1,6 +1,5 @@
-# CS 179 Lab 1 Unix Makefile
-# Written by Loko Kung, 2018
-#
+# CS 179 Final Project Unix Makefile
+# Adapted from Loko Kung, 2018 by Vaibhav Anand, 2018
 
 # Product Names
 CUDA_OBJ = cuda.o

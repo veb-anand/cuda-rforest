@@ -3,14 +3,8 @@
  * Vaibhav Anand, 2018
  */
 
-#include <cstdio>
 #include <cstdlib>
-// #include <cmath>
-// #include <cstring>
-// #include <time.h>
 #include <string.h>
-#include <ctime>
-#include <cassert>
 
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -21,12 +15,12 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 20000
+#define NUM_POINTS 1000
 #define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
-#define MAX_DEPTH NUM_POINTS
-#define VERBOSITY 0
+#define MAX_DEPTH NUM_POINTS // effectively no depth limitation when MAX_DEPTH = NUM_POINTS
+#define VERBOSITY 1
 
 // gpu point barriers: number of points needed at different stages to switch from using cpu to gpu (note: based on benchmarking on a single PC). see their usage for context
 #define GPU_BARRIER_1 750
@@ -38,29 +32,31 @@ using namespace std;
 class RandomForest
 {
 public:
-    RandomForest(float *data, int num_features, int num_points, int num_trees, 
-        int max_depth, float sub_sampling, bool gpu_mode, int verbose);
+    RandomForest(int num_trees, int max_depth, float sub_sampling, 
+        bool gpu_mode);
     ~RandomForest();
+    
+    void fit(float *data, int num_features, int num_points);
     float *predict(float *x, int num_points);
-    float predict_point(float *point, node *n);
 
     // these functions are relatively generic but are included because they contain personalized cuda versions
     float get_mse_loss(float *y, float *preds, int num_points);
     float *transpose(float *data, int num_rows, int num_cols);
     void start_time();
     float end_time();
+    void print_forest(int verbosity);
 
 private:
     float get_info_loss(float *y, float *col, float val, int num_points);
     node *data_split(float *data, int num_points, bool no_split);
     node *node_split(float *data, int num_points, int depth);
     void build_forest();
-    float *sub_sample(float *data);
+    float predict_point(float *point, node *n);
 
     float *data;
-    int num_features;
-
+    int num_features; // includes y
     int num_points;
+
     bool gpu_mode;
 
     int num_trees;
@@ -74,58 +70,48 @@ private:
 };
 
 
-RandomForest::RandomForest(float *data, int num_features, int num_points, 
-        int num_trees, int max_depth, float sub_sampling, bool gpu_mode, 
-        int verbose) {
-    this->data = data;
-    this->num_features = num_features; // includes y
-    this->num_points = num_points;
+RandomForest::RandomForest(int num_trees, int max_depth, float sub_sampling, 
+        bool gpu_mode) {
+    this->data = NULL;
+    this->num_features = -1;
+    this->num_points = -1;
+    this->gpu_in_x = NULL;
+    this->gpu_in_y = NULL;
+    this->gpu_out_x = NULL;
+
     this->gpu_mode = gpu_mode;
-    this->num_trees = num_trees; // TODO: take in from args.
+    this->num_trees = num_trees;
     this->forest = NULL;
     this->max_depth = max_depth;
-    this->sub_sample_size = (int) (sub_sampling * num_points); // TODO: fix. if -1, do not subsample. take from args
+    this->sub_sample_size = (int) (sub_sampling * num_points);
+}
+
+void RandomForest::fit(float *data, int num_features, int num_points) {
+    this->data = data;
+    this->num_features = num_features;
+    this->num_points = num_points;
 
     if (gpu_mode) {
         CUBLAS_CALL(cublasCreate(&cublasHandle));
 
         /* Allocate arrays/matrices on gpu. Allocate with the largest size that they will be used for. */
         int size_x = (num_features - 1) * num_points;
-        CUDA_CALL(cudaMalloc((void **) &this->gpu_in_x, size_x * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **) &this->gpu_in_y, num_points * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **) &this->gpu_out_x, size_x * sizeof(float)));
-                
+        CUDA_CALL(cudaMalloc((void **) &this->gpu_in_x, 
+            size_x * sizeof(float)));
+        CUDA_CALL(cudaMalloc((void **) &this->gpu_in_y, 
+            num_points * sizeof(float)));
+        CUDA_CALL(cudaMalloc((void **) &this->gpu_out_x, 
+            size_x * sizeof(float)));
     }
 
-    this->start_time();
     this->build_forest();
-    float end = this->end_time();
-
-if (verbose) {
-    for (int t = 0; t < MIN(num_trees, verbose); t++) {
-        print_tree(this->forest[t]); cout << endl << endl;
-    }
 }
-    
-    printf("\nForest (%d) time: %f\n", num_trees, end);
 
-    this->start_time();
-    float *test_x = this->transpose(data + num_points, num_features - 1, num_points);
-    printf("Transpose time: %f\n", this->end_time()); // (uint)(clock() - time_a)
-    // print_vector(data, num_points);
-    this->start_time();
-    float *preds = this->predict(test_x, num_points);
-    printf("Predict time: %f\n", this->end_time()); // (uint)(clock() - time_a)
-    // print_vector(preds, num_points);
-    this->start_time();
-    printf("\tTraining loss: %f\n", this->get_mse_loss(data, preds, num_points));
-    printf("Loss time: %f\n", this->end_time()); // (uint)(clock() - time_a)
-}
 
 RandomForest::~RandomForest() {
     // TODO: make sure that everything is freed
     /* Free all arrays and handles allocated and created for CUDA/CUBLAS. */
-    if (this->gpu_mode) {
+    if (this->gpu_in_x != NULL) {
         CUDA_CALL(cudaFree(this->gpu_in_x));
         CUDA_CALL(cudaFree(this->gpu_in_y));
         CUDA_CALL(cudaFree(this->gpu_out_x));
@@ -134,16 +120,31 @@ RandomForest::~RandomForest() {
     
     /* Free every tree of nodes in random forest. */
     if (this->forest != NULL) {
-        for (int t = 0; t < this->num_trees; t++) free_tree(forest[t]);
+        for (int t = 0; t < this->num_trees; t++) 
+            free_tree(forest[t]);
+
+        free(this->forest);
     }
 }
 
+
+void RandomForest::print_forest(int num_print) {
+    if (this->forest == NULL) {
+        printf("Invalid call to print_forest(). Cannot print models unless "
+            "they have been trained.\n");
+    }
+    
+    for (int t = 0; t < MIN(this->num_trees, num_print); t++) {
+        print_tree(this->forest[t]); 
+        printf("\n\n");
+    }
+}
 
 // with subsampling if this->sub_sample_size != -1
 void RandomForest::build_forest() {
     this->forest = (node **) malloc(this->num_trees * sizeof(node *));
 
-    float *sub;
+    float *sub = NULL;
     if (this->sub_sample_size > 0.) {
         sub = (float *) malloc(this->sub_sample_size * this->num_features * 
             sizeof(float));
@@ -152,7 +153,7 @@ void RandomForest::build_forest() {
 
     for (int t = 0; t < this->num_trees; t++) {
         // create subsample of data
-        if (this->sub_sample_size > 0.) {
+        if (sub != NULL) {
             for (int s = 0; s < this->sub_sample_size; s++) {
                 int p = rand() % num_points;
                 for (int f = 0; f < this->num_features; f++)
@@ -165,7 +166,7 @@ void RandomForest::build_forest() {
         }
     }
     
-    if (this->sub_sample_size > 0) free(sub);
+    if (sub != NULL) free(sub);
 }
 
 void RandomForest::start_time() {
@@ -187,7 +188,8 @@ float RandomForest::end_time() {
 
 /* Get the information lost (impurity in y) by splitting data across col by 
 val. y and col are of length num_points. This is cpu-only. */
-float RandomForest::get_info_loss(float *y, float *feature, float val, int num_points) {
+float RandomForest::get_info_loss(float *y, float *feature, float val, 
+        int num_points) {
     float part1_y = 0.;  // sum of y where col >= val (partition 1)
     float part1_n = SMALL;  // number of rows where col >= val
     float part2_y = 0.;  //sum of y where col < val (partition 2)
@@ -214,7 +216,6 @@ float RandomForest::get_info_loss(float *y, float *feature, float val, int num_p
 
 
 float RandomForest::predict_point(float *point, node *n) {
-    // TODO: convert this into (!n->feature)
     if (n->feature == 0)
         return n->val;
     
@@ -227,6 +228,11 @@ float RandomForest::predict_point(float *point, node *n) {
 // Takes data without y vector in point-major order (feature-major everywhere else)
 // also num_features is number of columns in x.
 float *RandomForest::predict(float *x, int num_points) {
+    if (this->forest == NULL) {
+        printf("Invalid call to predict(). Cannot predict unless model has "
+            "been trained.\n");
+    }
+
     float *y = (float *) malloc(num_points * sizeof(float));
     if (y == NULL)  malloc_err("predict");
 
@@ -329,6 +335,7 @@ node *RandomForest::data_split(float *data, int num_points, bool no_split) {
     int f = this->num_features - 1;
     int size_x = f * num_points;
 
+// use gpu based on num_points & num_features
 if(this->gpu_mode && (size_x > GPU_BARRIER_1) && (num_points > GPU_BARRIER_2)) {
     /* Copy data into inputs. */
     CUDA_CALL(cudaMemcpy(this->gpu_in_x, data + num_points, 
@@ -381,7 +388,6 @@ else {
 
 node *RandomForest::node_split(float *data, int num_points, int depth) {
     /* Find the optimal split in the data. */
-    // TODO: in function, use gpu based on num_points & num_features
 
     node *n = this->data_split(data, num_points, (depth >= this->max_depth));
 
@@ -426,18 +432,49 @@ node *RandomForest::node_split(float *data, int num_points, int depth) {
 }
 
 
+// todo: move this to main.cpp
+// runs through fitting, predicting, and computing loss on the same dataset
+void test_random_forest(RandomForest * clf, float *data, int num_features, 
+        int num_points, int num_trees, int verbosity) {
+
+    /* Fit random forest to data. Print several of the models, depending on 
+    verbosity and print the elapsed training time. */
+    clf->start_time();
+    clf->fit(data, num_features, num_points);
+    float elapsed_time = clf->end_time();
+
+    if (verbosity) clf->print_forest(verbosity);
+    printf("\nForest (%d) time: %f\n", num_trees, elapsed_time);
+
+    /* Take transpose of training data and save as test_x so that it is in 
+    point-major format for predicting. Print elapsed time of operation. */
+    clf->start_time();
+    float *test_x = clf->transpose(data + num_points, num_features - 1, num_points);
+    printf("Transpose time: %f\n", clf->end_time());
+
+    /* Predict on training data and save results in preds. Print elapsed time 
+    of predicting. */
+    clf->start_time();
+    float *preds = clf->predict(test_x, num_points);
+    printf("Predict time: %f\n", clf->end_time());
+
+    /* Compute loss from predictions on training data. Prints the training loss 
+    and the elapsed time to compute it. */
+    clf->start_time();
+    printf("\tTraining loss: %f\n", clf->get_mse_loss(data, preds, num_points));
+    printf("Loss time: %f\n", clf->end_time());
+}
+
 
 
 int main(int argc, char **argv) {
-    // int num_features = NUM_FEATURES, num_points = NUM_POINTS;
-    
     /* Check number of arguments and parse them. */
     if (argc < 2) {
         printf("Incorrect number of arguments passed in (%d).\n"
         "Usage: ./rforest <path of csv>\n\t[-s/--shape <# points> <# features>]"
         "\n\t[-t/--trees <# of trees>]\n\t[-d/--depth <max depth of trees>]" 
-        "\n\t[-f/--frac <fraction to use for subsmapling, if <=0, no sampling>]"
-        "\n\t[-v/--verbose <level of verbosity, default 1>\n", argc);
+        "\n\t[-f/--frac <fraction to use for subsampling, if <=0, no sampling>]"
+        "\n\t[-v/--verbose <level of verbosity, default 1>]\n", argc);
         exit(0);
     }
     string path = argv[1];
@@ -446,7 +483,7 @@ int main(int argc, char **argv) {
     int num_trees = NUM_TREES;
     float sub_sampling = SUBSAMPLING_RATIO;
     int max_depth = MAX_DEPTH;
-    int verbose = VERBOSITY;
+    int verbosity = VERBOSITY;
 
     for (int i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--shape") == 0 || strcmp(argv[i], "-s") == 0) {
@@ -467,23 +504,31 @@ int main(int argc, char **argv) {
             if (i < argc) sub_sampling = atof(argv[i]);
         } else if (strcmp(argv[i], "--verbosity") == 0 || strcmp(argv[i], "-v") == 0) {
             i++;
-            if (i < argc) verbose = atoi(argv[i]);
+            if (i < argc) verbosity = atoi(argv[i]);
         }
     }
 
-
     /* Read in data from path. */
     float *data = read_csv(path, num_features, num_points, false);
+    // uncomment to print csv:
     // print_matrix(data, num_features, num_points);
 
-    /* Do benchmarking. */
+
+    /* Do benchmarking on cpu and gpu versions of the model. */
     printf("\n************ CPU benchmarking: ************\n");
-    RandomForest(data, num_features, num_points, num_trees, max_depth, 
-        sub_sampling, false, verbose);
+    RandomForest *rforest_cpu = new RandomForest(num_trees, max_depth, 
+        sub_sampling, false);
+    test_random_forest(rforest_cpu, data, num_features, num_points, num_trees, 
+        verbosity);
+    delete rforest_cpu;
+
     
     printf("\n\n************ GPU/CUDA benchmarking: ************\n");
-    RandomForest(data, num_features, num_points, num_trees, max_depth, 
-      sub_sampling, true, verbose);
+    RandomForest *rforest_gpu = new RandomForest(num_trees, max_depth, 
+      sub_sampling, true);
+    test_random_forest(rforest_gpu, data, num_features, num_points, num_trees, 
+        verbosity);
+    delete rforest_gpu;
 
     free(data);
 
