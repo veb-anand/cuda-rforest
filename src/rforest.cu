@@ -22,9 +22,6 @@
     unsigned tid = threadIdx.x;
     float part1_n, part1_y, part2_n, part2_y;
 
-    if (tid > (num_points * 4 - 2)) shmem[tid] = 0.;
-
-
     for (uint p = 0; p < num_points; p++) {
         uint i = (blockIdx.x * num_points) + tid; // match to every element in gpu_in_x
 
@@ -49,6 +46,7 @@
             __syncthreads();
             if (tid < s) {
                 shmem[tid] += shmem[tid + s];
+                shmem[tid + s] = 0.; // for subsequent kernel runs
             }
         }
 

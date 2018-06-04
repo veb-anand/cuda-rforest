@@ -21,7 +21,7 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 200
+#define NUM_POINTS 1024
 #define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
