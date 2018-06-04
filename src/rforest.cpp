@@ -25,7 +25,7 @@
 #define NUM_FEATURES 5
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
-#define MAX_DEPTH NUM_POINTS
+#define MAX_DEPTH 1 // NUM_POINTS
 
 using namespace std;
 
@@ -64,7 +64,7 @@ private:
     int max_depth;
 
     cublasHandle_t cublasHandle;
-    float *gpu_in_x, *gpu_in_y, *gpu_tmp, *gpu_out_x;
+    float *gpu_in_x, *gpu_in_y, *gpu_out_x;
     cudaEvent_t start, stop;
 };
 
@@ -87,7 +87,6 @@ RandomForest::RandomForest(float *data, int num_features, int num_points,
         int size_x = (num_features - 1) * num_points;
         CUDA_CALL(cudaMalloc((void **) &this->gpu_in_x, size_x * sizeof(float)));
         CUDA_CALL(cudaMalloc((void **) &this->gpu_in_y, num_points * sizeof(float)));
-        CUDA_CALL(cudaMalloc((void **) &this->gpu_tmp, size_x * sizeof(float)));
         CUDA_CALL(cudaMalloc((void **) &this->gpu_out_x, size_x * sizeof(float)));
                 
     }
@@ -120,7 +119,6 @@ RandomForest::~RandomForest() {
     if (this->gpu_mode) {
         CUDA_CALL(cudaFree(this->gpu_in_x));
         CUDA_CALL(cudaFree(this->gpu_in_y));
-        CUDA_CALL(cudaFree(this->gpu_tmp));
         CUDA_CALL(cudaFree(this->gpu_out_x));
         CUBLAS_CALL(cublasDestroy(this->cublasHandle));    
     }
@@ -238,16 +236,16 @@ float *RandomForest::predict(float *x, int num_points) {
 // calculates and returns mean-squared error loss
 float RandomForest::get_mse_loss(float *y, float *preds, int num_points) {
     float loss;
-    // if gpu mode and we have enough room in pre-allocated gpu_in_y and gpu_tmp, then use cublas
+    // if gpu mode and we have enough room in pre-allocated gpu_in_y and gpu_out_x, then use cublas
 if (this->gpu_mode && (num_points <= this->num_points)) {
     float negone = -1.0;
     
     CUDA_CALL(cudaMemcpy(this->gpu_in_y, y, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
-    CUDA_CALL(cudaMemcpy(this->gpu_tmp, preds, num_points * sizeof(float), 
+    CUDA_CALL(cudaMemcpy(this->gpu_out_x, preds, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
     
-    CUBLAS_CALL(cublasSaxpy(this->cublasHandle, num_points, &negone, this->gpu_tmp, 1, 
+    CUBLAS_CALL(cublasSaxpy(this->cublasHandle, num_points, &negone, this->gpu_out_x, 1, 
         this->gpu_in_y, 1));
     CUBLAS_CALL(cublasSnrm2(this->cublasHandle, num_points, this->gpu_in_y, 1, &loss));
     loss *= loss; // because Snrm2 returns sqrt(sum(squares))
@@ -275,10 +273,12 @@ float *RandomForest::transpose(float *data, int num_rows, int num_cols) {
 
 if ((this->gpu_mode) && ((this->num_features - 1) * this->num_points >= size)) {
     float one = 1., zero = 0.;
-    CUDA_CALL(cudaMemcpy(this->gpu_tmp, data, size * sizeof(float), 
+    CUDA_CALL(cudaMemcpy(this->gpu_in_x, data, size * sizeof(float), 
         cudaMemcpyHostToDevice));
     // use cublasSgeam() w/alpha=1 and beta=0
-    CUBLAS_CALL(cublasSgeam(this->cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, num_rows, num_cols, &one, this->gpu_tmp, num_cols, &zero, this->gpu_tmp, num_rows, this->gpu_out_x, num_rows));
+    CUBLAS_CALL(cublasSgeam(this->cublasHandle, CUBLAS_OP_T, CUBLAS_OP_N, 
+        num_rows, num_cols, &one, this->gpu_in_x, num_cols, &zero, 
+        this->gpu_in_x, num_rows, this->gpu_out_x, num_rows));
     CUDA_CALL(cudaMemcpy(t, this->gpu_out_x, size * sizeof(float), 
         cudaMemcpyDeviceToHost));
 }
@@ -344,8 +344,8 @@ if(!this->gpu_mode) {
         cudaMemcpyHostToDevice));
 
     /* Compute information gains. */
-    cuda_call_get_losses(this->gpu_in_x, this->gpu_in_y, this->gpu_tmp, 
-        this->gpu_out_x, f, num_points);
+    cuda_call_get_losses(this->gpu_in_x, this->gpu_in_y, this->gpu_out_x, f, 
+        num_points);
     int result;
 
     CUBLAS_CALL(cublasIsamin(this->cublasHandle, size_x, this->gpu_out_x, 1, 

@@ -16,7 +16,7 @@
 
  __global__
  void cuda_get_losses(const float *gpu_in_x, const float *gpu_in_y, 
-        float *gpu_tmp, float *gpu_out_x, int num_features, int num_points) {
+        float *gpu_out_x, int num_features, int num_points) {
     extern __shared__ float shmem[];
 
     unsigned tid = threadIdx.x;
@@ -74,12 +74,10 @@
 
 
 // num_features does not include y
-void cuda_call_get_losses(float *gpu_in_x, float *gpu_in_y, float *gpu_tmp,
-    float *gpu_out_x, int num_features, int num_points) {
-    // TODO: constraint w/shared memory
-    // change to non-hard-coded variables
+void cuda_call_get_losses(float *gpu_in_x, float *gpu_in_y, float *gpu_out_x,
+    int num_features, int num_points) {
     cuda_get_losses<<<num_features, THREADS_PER_BLOCK, 
         (4 * THREADS_PER_BLOCK * sizeof(float))>>>(
-        gpu_in_x, gpu_in_y, gpu_tmp, gpu_out_x, num_features, num_points);
+        gpu_in_x, gpu_in_y, gpu_out_x, num_features, num_points);
 }
 

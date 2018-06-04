@@ -26,18 +26,8 @@ Times are in microseconds (Old):
 
 
 Times are in ms:
-10x5
+2000x5
     CPU
-        Tree ~ 0.01, Transpose ~ 0.002, Predict ~ 0.045
+        Tree ~ 85, Transpose ~ 0.02, Loss ~ 0.04
     GPU2
-        Tree ~ 0.13, Transpose ~ 0.03, Loss ~ 0.003
-1000x10
-    CPU
-        Tree ~ 160, Transpose ~ 0.03, Loss ~ 0.001
-    GPU2
-        Tree ~ 58, Tranpose ~ 0.05, Loss ~ 0.08
-1000x50
-    CPU
-        Tree ~ 1027, Transpose ~ 0.23, Loss ~ 0.007
-    GPU2
-        Tree ~ 108, Tranpose ~ 0.10, Loss ~ 0.05
+        Tree ~ 7.3, Transpose ~ 0.04, Loss ~ 0.05
