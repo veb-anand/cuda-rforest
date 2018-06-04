@@ -3,10 +3,10 @@
  * Vaibhav Anand, 2018
  */
 
-#ifndef UTILS_H
-#define UTILS_H
-
 #pragma once
+
+#include <iostream>
+#include <string.h>
 
 #define GINI(x) (1. - x * x - (1. - x) * (1. - x))
 #define MIN(a, b) (a > b ? b : a)
@@ -40,4 +40,3 @@ void print_vector(float *data, int num_points);
 
 float *read_csv(string path, int num_features, int num_points, bool verbose);
 
-#endif

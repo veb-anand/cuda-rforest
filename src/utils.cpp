@@ -9,6 +9,7 @@
 
 #include "utils.hpp"
 
+using namespace std;
 
 /***** NODE FUNCTIONS */
 

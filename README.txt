@@ -31,7 +31,7 @@ IMPORTANT NOTES:
         [-d/--depth <max depth of trees>]
         [-f/--frac <fraction to use for subsampling, if <=0, no sampling]
         [-v/--verbose <level of verbosity, default 1>]
-    If the optional arguments are not set, these values are set to their defaults at the top of rforest.cpp, where they are further described in detail.
+    If the optional arguments are not set, these values are set to their defaults at the top of main.cpp, where they are further described in detail.
 
   5. What is called for each forest
     forest.run() - It fits the model according to data and then predicts using the model. it does this while printing times for computation as well as the forest itself (prints verbosity (set by -v) number of trees).
@@ -40,6 +40,8 @@ IMPORTANT NOTES:
   6. Building the model
     The GPU version will use the kernel in rforest.cu to find the next optimal split in the data at each node in the tree (when the number of points is below a threshold, it will switch to using only the CPU, however). The CPU version will do this using members of the RandomForest class. In both versions, the tree is constructed in a depth-first recursive manner as shown in RandomForest::node_split().
       The CUDA kernel developed to find the optimal split at each node in a decision tree, although less than a hundred lines, went through many design-changes and refactoring for both optimizations and correctness. TODO: more?. The parallel CPU functions to the kernel lie in data_split() paired with get_info_loss().
+
+  1. hardware assumptions
 
   2. Testing correctness
     This was confirmed for both the CPU and GPU modes by 

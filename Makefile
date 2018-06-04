@@ -6,7 +6,7 @@ CUDA_OBJ = cuda.o
 
 # Input Names
 CUDA_FILES = src/rforest.cu
-CPP_FILES = src/rforest.cpp src/utils.cpp
+CPP_FILES = src/main.cpp src/rforest.cpp src/utils.cpp
 
 # ------------------------------------------------------------------------------
 
