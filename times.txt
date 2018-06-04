@@ -29,5 +29,10 @@ Times are in ms:
 2000x5
     CPU
         Tree ~ 85, Transpose ~ 0.02, Loss ~ 0.04
-    GPU2
+    GPU
         Tree ~ 7.3, Transpose ~ 0.04, Loss ~ 0.05
+500x5
+    CPU
+        Tree ~ 5.5
+    GPU
+        Tree ~ 1.7

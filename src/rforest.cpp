@@ -21,11 +21,15 @@
 
 
 /* Set defaults unless user passed in arguments overriding these. */
-#define NUM_POINTS 2000
-#define NUM_FEATURES 5
+#define NUM_POINTS 250
+#define NUM_FEATURES 2
 #define NUM_TREES 1
 #define SUBSAMPLING_RATIO -1
-#define MAX_DEPTH 1 // NUM_POINTS
+#define MAX_DEPTH NUM_POINTS
+
+// gpu point barriers: number of points needed at different stages to switch from using cpu to gpu (note: based on benchmarking on a single PC). see their usage for context
+#define GPU_BARRIER_1 750
+#define GPU_BARRIER_2 50
 
 using namespace std;
 
@@ -47,7 +51,7 @@ public:
 
 private:
     float get_info_loss(float *y, float *col, float val, int num_points);
-    node *data_split(float *data, int num_points, bool no_split, bool v);
+    node *data_split(float *data, int num_points, bool no_split);
     node *node_split(float *data, int num_points, int depth);
     void build_forest();
     float *sub_sample(float *data);
@@ -298,7 +302,7 @@ else {
 
 /* Find optimal split in the data (by attribute and by val) that minimizes 
 impurity. */
-node *RandomForest::data_split(float *data, int num_points, bool no_split, bool v) {
+node *RandomForest::data_split(float *data, int num_points, bool no_split) {
     node *n = new node;
 
     /* Get unc (uncertainty/impurity) in all the data (note that data[0] is 
@@ -317,29 +321,13 @@ node *RandomForest::data_split(float *data, int num_points, bool no_split, bool 
     
     float unc = GINI(y_true / num_points);
 
-if(!this->gpu_mode) {
-    /* Now, determine what split causes the smallest information loss. */
-    n->gain = unc;
-    float info_loss;
-
-    for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
-        for (int p = 0; p < num_points; p++) {
-            info_loss = this->get_info_loss(data, data + i, data[i + p], num_points);
-            if (info_loss < n->gain) {
-                n->gain = info_loss;
-                n->feature = i / num_points;
-                n->val = data[i + p];
-            }
-        }
-    }
-
-} else {
     int f = this->num_features - 1;
     int size_x = f * num_points;
 
+if(this->gpu_mode && (size_x > GPU_BARRIER_1) && (num_points > GPU_BARRIER_2)) {
     /* Copy data into inputs. */
-    CUDA_CALL(cudaMemcpy(this->gpu_in_x, data + num_points, size_x * sizeof(float), 
-        cudaMemcpyHostToDevice));
+    CUDA_CALL(cudaMemcpy(this->gpu_in_x, data + num_points, 
+        size_x * sizeof(float), cudaMemcpyHostToDevice));
     CUDA_CALL(cudaMemcpy(this->gpu_in_y, data, num_points * sizeof(float), 
         cudaMemcpyHostToDevice));
 
@@ -356,8 +344,24 @@ if(!this->gpu_mode) {
     result += num_points;
     n->feature = (result / num_points);
     n->val = data[result];
+} 
+else {
+    /* Now, determine what split causes the smallest information loss. */
+    n->gain = unc;
+    float info_loss;
 
+    for (int i = num_points; i < (this->num_features * num_points); i += num_points) {
+        for (int p = 0; p < num_points; p++) {
+            info_loss = this->get_info_loss(data, data + i, data[i + p], num_points);
+            if (info_loss < n->gain) {
+                n->gain = info_loss;
+                n->feature = i / num_points;
+                n->val = data[i + p];
+            }
+        }
+    }
 }
+
     n->gain = unc - n->gain;
 
     // Set to the parition to be the mode of y, since no possible info gain
@@ -374,7 +378,7 @@ node *RandomForest::node_split(float *data, int num_points, int depth) {
     /* Find the optimal split in the data. */
     // TODO: in function, use gpu based on num_points & num_features
 
-    node *n = this->data_split(data, num_points, (depth >= this->max_depth), false);
+    node *n = this->data_split(data, num_points, (depth >= this->max_depth));
 
     /* Split did not help increase information, so stop. */
     if (n->feature == 0) {
