@@ -60,18 +60,14 @@ LIBS = -L$(CUDA_LIB_PATH) -lcudart -lcufft -lcublas -lsndfile
 CPP_OBJ = $(notdir $(addsuffix .o, $(CPP_FILES)))
 
 # Top level rules
-default: run
-
-# TODO: delete this
-run: rforest
-	./rforest "data/data.csv"
+default: rforest
 
 rforest: $(CPP_OBJ) $(CUDA_OBJ) $(CUDA_OBJ_FILES)
 	$(GPP) $(FLAGS) -o rforest $(INCLUDE) $^ $(LIBS) 
 
 
 # Compile C++ Source Files
-%.cpp.o: src/%.cpp
+%.cpp.o: src/%.cpp src/constants.hpp
 	$(GPP) $(FLAGS) -c -o $@ $(INCLUDE) $< 
 
 

@@ -20,8 +20,8 @@ public:
     ~RandomForest();
     
     /* Fits the model by building a random forest trained on arg:data, described
-    by num_features and num_points.*/
-    void fit(float *data, int num_features, int num_points);
+    by num_features and num_points. Returns time to build the forest. */
+    float fit(float *data, int num_features, int num_points);
 
     /* Predicts and returns vector for input matrix arg:test_x with 
     arg:num_points. */

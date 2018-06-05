@@ -17,6 +17,6 @@ dont. use cublas for unc. sum(gpu_in_y)
 16. find and solve TODO texts, delete todo.txt
 17. make python script to create data 
 18. comment & writeup README
-
 19. finish computing times
+
 20. commit and push to repo, delete this file

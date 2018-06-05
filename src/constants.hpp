@@ -4,8 +4,8 @@
 Use these defaults below unless user passes in arguments overriding these. */
 
 /* Shape (number of points and features) in input dataset to read in. */
-#define NUM_POINTS 2000
-#define NUM_FEATURES 5
+#define NUM_POINTS 5000
+#define NUM_FEATURES 10
 
 /* Number of decision trees to use in random forest model. */
 #define NUM_TREES 1
@@ -13,7 +13,7 @@ Use these defaults below unless user passes in arguments overriding these. */
 /* Fraction of points to use to train in each tree. Points are chosen randomly. 
 If SUBSAMPLING_FRAC < 0, the original dataset will not be sampled and the 
 model will train on all of the training data. */
-#define SUBSAMPLING_FRAC -1
+#define SUBSAMPLING_FRAC 0
 
 /* The maximum depth that a decision tree is allowed to recurse. This can 
 help avoid over-fitting and increase performance. By default, it is set to 

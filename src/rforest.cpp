@@ -58,8 +58,8 @@ RandomForest::~RandomForest() {
 }
 
 /* Fits the model by building a random forest trained on arg:data, described by
-num_features and num_points.*/
-void RandomForest::fit(float *data, int num_features, int num_points) {
+num_features and num_points. Returns time to build the forest w/o allocation. */
+float RandomForest::fit(float *data, int num_features, int num_points) {
     /* Set these model parameters based on constructor's arguments. */
     this->data = data;
     this->num_features = num_features;
@@ -79,8 +79,10 @@ void RandomForest::fit(float *data, int num_features, int num_points) {
             size_x * sizeof(float)));
     }
 
-    /* Now construct the forest. */
+    /* Now construct the forest and return time to do so. */
+    this->start_time();
     this->build_forest((int) (this->sub_sampling * num_points));
+    return this->end_time();
 }
 
 /* Predicts and returns vector for input matrix arg:test_x with arg:num_points.
@@ -160,7 +162,7 @@ float *RandomForest::transpose(float *data, int num_rows, int num_cols) {
     float *t = (float *) malloc(size * sizeof(float));
     if (t == NULL) malloc_err("transpose");
 
-    /* If gpu mode and we have enough room in pre-allocated gpu_in_x and 
+    /* If this->gpu_mode and we have enough room in pre-allocated gpu_in_x and 
     gpu_out_x, then use cublas to calculate transpose. */
 if ((this->gpu_mode) && ((this->num_features - 1) * this->num_points >= size)) {
     float one = 1., zero = 0.;

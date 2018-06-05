@@ -99,7 +99,7 @@ calculate the impurity based on splitting the data by that point. */
             /* Get proportion of points that are in partition 1 vs 2. */
             float part1_p = part1_n / num_points;
             
-            /* Store total impurity by spliting into partitions 1 and 2. */
+            /* Store total impurity by splitting into partitions 1 and 2. */
             gpu_out_x[blockIdx.x * num_points + p] = (GINI(part1_y) * part1_p 
                 + GINI(part2_y) * (1 - part1_p));
         }
@@ -107,7 +107,7 @@ calculate the impurity based on splitting the data by that point. */
 }
 
 
-/* Call the cuda_get_losses kernel. This can be exposed to non-cuda files. Note 
+/* Call the cuda_get_losses kernel. This can be exposed to non-CUDA files. Note 
 that arg:num_features does not include y as a feature, unlike most other 
 functons. Also, please read section "hardware assumptions" in README.txt. */
 void cuda_call_get_losses(float *gpu_in_x, float *gpu_in_y, float *gpu_out_x,

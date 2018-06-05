@@ -20,9 +20,7 @@ void test_random_forest(RandomForest * clf, float *data, int num_features,
 
     /* Fit random forest to data. Print several of the models, depending on 
     verbosity and print the elapsed training time. */
-    clf->start_time();
-    clf->fit(data, num_features, num_points);
-    float elapsed_time = clf->end_time();
+    float elapsed_time = clf->fit(data, num_features, num_points);
 
     if (verbosity) clf->print_forest(verbosity);
     printf("\nForest (%d) time: %f\n", num_trees, elapsed_time);

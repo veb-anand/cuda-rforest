@@ -2,6 +2,23 @@ Times are in ms:
 
 No subsampling/bagging or capped depth. (0 loss on training).
 PointsxFeatures
+500x5
+    CPU
+        Tree ~ 5.5
+    GPU
+        Tree ~ 1.7
+1000x5
+    Python
+        Tree ~ 5,900
+    CPU
+        Tree ~ 146
+    GPU
+        Tree ~ 38
+2000x5
+    CPU
+        Tree ~ 85, Transpose ~ 0.02, Loss ~ 0.04
+    GPU
+        Tree ~ 7.3, Transpose ~ 0.04, Loss ~ 0.05
 1000x10
     Python
         Tree ~ 9,800
@@ -9,16 +26,6 @@ PointsxFeatures
         Tree ~ 265
     GPU
         Tree ~ 49
-2000x5
-    CPU
-        Tree ~ 85, Transpose ~ 0.02, Loss ~ 0.04
-    GPU
-        Tree ~ 7.3, Transpose ~ 0.04, Loss ~ 0.05
-500x5
-    CPU
-        Tree ~ 5.5
-    GPU
-        Tree ~ 1.7
 10000x10
     CPU
         Tree ~ 20,172
@@ -43,5 +50,24 @@ PointsxFeatures
 
 
 Loss after subsampling different amounts and using different depths.
-Mode, Shape, Number of trees, Subsampling ratio, Max depth
+    Mode, Shape, Number of trees, Subsampling ratio, Max depth, Time, Error
+CPU, 5000x10, 1, 0, BIG, 4597, 0.
+GPU, 5000x10, 1, 0, BIG, 800, 0.
 
+CPU, 5000x10, 1, 0.3, BIG, 489, 0.358
+GPU, 5000x10, 1, 0.3, BIG, 262, 0.368
+
+CPU, 5000x10, 4, 0.3, BIG, 2669, 0.305
+GPU, 5000x10, 4, 0.3, BIG, 1015, 0.304
+
+CPU, 5000x10, 16, 0.3, BIG, 7160, 0.164
+GPU, 5000x10, 16, 0.3, BIG, 4020, 0.161
+
+CPU, 5000x10, 64, 0.3, BIG, 32292, 0.038
+GPU, 5000x10, 64, 0.3, BIG, 16411, 0.037
+
+CPU, 5000x10, 16, 0.6, 5, 23361, 0.421
+GPU, 5000x10, 16, 0.6, 5, 858, 0.448
+
+CPU, 5000x10, 64, 0.6, 5, 22668, 0.398
+GPU, 5000x10, 64, 0.6, 5, 1513, 0.414

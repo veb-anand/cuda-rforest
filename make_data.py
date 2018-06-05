@@ -13,5 +13,5 @@ else:
 
 data = np.random.rand(num_points, num_features)
 data[:, 0] = np.random.randint(2, size=data.shape[0])
-pd.DataFrame(data).to_csv('../cuda/data/data.csv', index=False, 
+pd.DataFrame(data).to_csv('data/data.csv', index=False, 
                           line_terminator='\n', header=False)
