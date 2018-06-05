@@ -1,6 +1,6 @@
 /* 
- * Random Forest
- * Vaibhav Anand, 2018
+ * RandomForest
+ * @author Vaibhav Anand, 2018
  */
 
 #include <cstdlib>
@@ -13,9 +13,8 @@
 
 using namespace std;
 
-
-// todo: move this to main.cpp
-// runs through fitting, predicting, and computing loss on the same dataset
+/* Tests the random forest model by fitting, predicting, and computing loss on 
+the dataset "data". */
 void test_random_forest(RandomForest * clf, float *data, int num_features, 
         int num_points, int num_trees, int verbosity) {
 
@@ -31,7 +30,8 @@ void test_random_forest(RandomForest * clf, float *data, int num_features,
     /* Take transpose of training data and save as test_x so that it is in 
     point-major format for predicting. Print elapsed time of operation. */
     clf->start_time();
-    float *test_x = clf->transpose(data + num_points, num_features - 1, num_points);
+    float *test_x = clf->transpose(data + num_points, num_features - 1, 
+        num_points);
     printf("Transpose time: %f\n", clf->end_time());
 
     /* Predict on training data and save results in preds. Print elapsed time 
@@ -48,7 +48,8 @@ void test_random_forest(RandomForest * clf, float *data, int num_features,
 }
 
 
-
+/* Parses user arguments. Then reads in data and benchmarks the random forest 
+model in CPU and GPU modes separately. */
 int main(int argc, char **argv) {
     /* Check number of arguments and parse them. */
     if (argc < 2) {
@@ -63,7 +64,7 @@ int main(int argc, char **argv) {
     int num_points = NUM_POINTS;
     int num_features = NUM_FEATURES;
     int num_trees = NUM_TREES;
-    float sub_sampling = SUBSAMPLING_RATIO;
+    float sub_sampling = SUBSAMPLING_FRAC;
     int max_depth = MAX_DEPTH;
     int verbosity = VERBOSITY;
 
@@ -75,28 +76,29 @@ int main(int argc, char **argv) {
                 i++;
                 num_features = atoi(argv[i]);
             }
-        } else if (strcmp(argv[i], "--trees") == 0 || strcmp(argv[i], "-t") == 0) {
+        } else 
+        if (strcmp(argv[i], "--trees") == 0 || strcmp(argv[i], "-t") == 0) {
             i++;
             if (i < argc) num_trees = atoi(argv[i]);
-        } else if (strcmp(argv[i], "--depth") == 0 || strcmp(argv[i], "-d") == 0) {
+        } else 
+        if (strcmp(argv[i], "--depth") == 0 || strcmp(argv[i], "-d") == 0) {
             i++;
             if (i < argc) max_depth = atoi(argv[i]);
-        } else if (strcmp(argv[i], "--frac") == 0 || strcmp(argv[i], "-f") == 0) {
+        } else 
+        if (strcmp(argv[i], "--frac") == 0 || strcmp(argv[i], "-f") == 0) {
             i++;
             if (i < argc) sub_sampling = atof(argv[i]);
-        } else if (strcmp(argv[i], "--verbosity") == 0 || strcmp(argv[i], "-v") == 0) {
+        } else 
+        if (strcmp(argv[i], "--verbosity") == 0 || strcmp(argv[i], "-v") == 0) {
             i++;
             if (i < argc) verbosity = atoi(argv[i]);
         }
     }
 
-    /* Read in data from path. */
+    /* Read in data from path. Change last arg to print csv. */
     float *data = read_csv(path, num_features, num_points, false);
-    // uncomment to print csv:
-    // print_matrix(data, num_features, num_points);
 
-
-    /* Do benchmarking on cpu and gpu versions of the model. */
+    /* Do benchmarking on CPU and GPU versions of the model. */
     printf("\n************ CPU benchmarking: ************\n");
     RandomForest *rforest_cpu = new RandomForest(num_trees, max_depth, 
         sub_sampling, false);
@@ -111,6 +113,7 @@ int main(int argc, char **argv) {
     test_random_forest(rforest_gpu, data, num_features, num_points, num_trees, 
         verbosity);
     delete rforest_gpu;
+
 
     free(data);
 

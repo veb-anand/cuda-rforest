@@ -14,8 +14,9 @@ dont. use cublas for unc. sum(gpu_in_y)
 12. create depth limit to each tree (prevent over-training)
 13. benchmark properly (cuda). support more than 1000 points and benchmark
 15. have the gpu only do on splits that are more than X points
-
 16. find and solve TODO texts, delete todo.txt
-16. comment & writeup
 17. make python script to create data 
-18. commit and push to repo, delete this file
+18. comment & writeup README
+
+19. finish computing times
+20. commit and push to repo, delete this file

@@ -62,6 +62,7 @@ CPP_OBJ = $(notdir $(addsuffix .o, $(CPP_FILES)))
 # Top level rules
 default: run
 
+# TODO: delete this
 run: rforest
 	./rforest "data/data.csv"
 
